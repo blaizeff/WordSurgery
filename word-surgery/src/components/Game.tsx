@@ -30,15 +30,6 @@ const DIVIDER_HEIGHT = 60;
 // Minimum word length to be considered valid
 const MIN_WORD_LENGTH = 3;
 
-// Dictionary of valid words
-// In a real app, this would be loaded from a file or API
-const DICTIONARY = new Set([
-  "voiture", "tour", "tire", "toi", "roi", "rite", "vie", 
-  "rive", "rire", "vert", "rat", "terre", "rate", "verre",
-  "verrat", "art", "toiture", "tir"
-  // Add more words as needed
-]);
-
 // Interface for detected words
 interface DetectedWord {
   word: string;
@@ -168,7 +159,14 @@ const Divider: React.FC<DividerProps> = ({ index, isActive, onLayout }) => {
   );
 };
 
-export default function Game() {
+// Add interface for Game props
+interface GameProps {
+  dictionary: string[];
+  onBackToMenu?: () => void;
+}
+
+// Update to add props parameter
+export default function Game({ dictionary, onBackToMenu }: GameProps) {
   // State
   const [currentWord, setCurrentWord] = useState<Word>(() => {
     // Initialize the current word with marked initial letters
@@ -550,7 +548,7 @@ export default function Game() {
         const subword = wordString.substring(start, end);
         
         // Check if this is a valid word from our dictionary
-        if (DICTIONARY.has(subword)) {
+        if (dictionary.includes(subword)) {
           // Make sure this word contains at least one added letter
           let containsAddedLetter = false;
           for (let i = start; i < end; i++) {
@@ -575,7 +573,7 @@ export default function Game() {
     foundWords.sort((a, b) => b.word.length - a.word.length);
     
     setDetectedWords(foundWords);
-  }, [currentWord]);
+  }, [currentWord, dictionary]);
   
   // NEW: Check for valid words after each letter placement
   useEffect(() => {
@@ -668,7 +666,7 @@ export default function Game() {
             const subword = wordString.substring(start, end);
             
             // Check if this is a valid word from our dictionary
-            if (DICTIONARY.has(subword)) {
+            if (dictionary.includes(subword)) {
               // Make sure this word contains at least one added letter
               let containsAddedLetter = false;
               for (let i = start; i < end; i++) {
@@ -695,7 +693,7 @@ export default function Game() {
         setDetectedWords(foundWords);
       }
     }, 100);
-  }, [currentWord, availableWord, lastPlacedLetterIndices, placedLetterPositions]);
+  }, [currentWord, availableWord, lastPlacedLetterIndices, placedLetterPositions, dictionary]);
 
   // Measure word container for positioning
   const handleWordContainerLayout = useCallback((event: any) => {
@@ -713,6 +711,16 @@ export default function Game() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.container}>
+        {/* Add back button if onBackToMenu prop is provided */}
+        {onBackToMenu && (
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={onBackToMenu}
+          >
+            <Text style={styles.backButtonText}>← Back to Menu</Text>
+          </TouchableOpacity>
+        )}
+        
         <Text style={styles.title}>Word Surgery</Text>
         
         {/* Game completed message */}
@@ -1016,5 +1024,18 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         color: 'white',
         marginBottom: 8,
+    },
+    backButton: {
+        position: 'absolute',
+        top: 10,
+        left: 10,
+        padding: 8,
+        backgroundColor: 'rgba(0, 0, 0, 0.1)',
+        borderRadius: 8,
+        zIndex: 10,
+    },
+    backButtonText: {
+        color: '#007bff',
+        fontWeight: '500',
     },
 });
