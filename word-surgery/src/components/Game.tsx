@@ -1,5 +1,5 @@
-import React, { useState, useRef, useCallback } from "react";
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from "react-native";
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Button } from "react-native";
 import { Word } from "src/classes/Word";
 import { 
   GestureHandlerRootView, 
@@ -15,6 +15,7 @@ import Animated, {
   Easing
 } from 'react-native-reanimated';
 import { ILetter } from "../interfaces/ILetter";
+import { throttle } from 'lodash';
 
 // For debug purposes
 const DEBUG = true;
@@ -25,6 +26,25 @@ const DIVIDER_ACTIVE_WIDTH = 6;
 const DIVIDER_INACTIVE_WIDTH = 2;
 // Divider height 
 const DIVIDER_HEIGHT = 60;
+
+// Minimum word length to be considered valid
+const MIN_WORD_LENGTH = 3;
+
+// Dictionary of valid words
+// In a real app, this would be loaded from a file or API
+const DICTIONARY = new Set([
+  "voiture", "tour", "tire", "toi", "roi", "rite", "vie", 
+  "rive", "rire", "vert", "rat", "terre", "rate", "verre",
+  "verrat", "art", "toiture", "tir"
+  // Add more words as needed
+]);
+
+// Interface for detected words
+interface DetectedWord {
+  word: string;
+  startIndex: number;
+  endIndex: number;
+}
 
 // Props for draggable letter component
 interface DraggableLetterProps {
@@ -40,6 +60,7 @@ interface DraggableLetterProps {
 interface DividerProps {
   index: number;
   isActive: boolean;
+  onLayout?: (index: number, layout: { x: number, y: number, width: number, height: number }) => void;
 }
 
 // Draggable letter component
@@ -117,7 +138,7 @@ const DraggableLetter: React.FC<DraggableLetterProps> = ({
 };
 
 // Divider component
-const Divider: React.FC<DividerProps> = ({ index, isActive }) => {
+const Divider: React.FC<DividerProps> = ({ index, isActive, onLayout }) => {
   const animatedStyle = useAnimatedStyle(() => {
     return {
       width: withTiming(isActive ? DIVIDER_ACTIVE_WIDTH : DIVIDER_INACTIVE_WIDTH, {
@@ -138,6 +159,11 @@ const Divider: React.FC<DividerProps> = ({ index, isActive }) => {
     <Animated.View 
       style={[styles.divider, animatedStyle]}
       collapsable={false}
+      onLayout={(event) => {
+        if (onLayout) {
+          onLayout(index, event.nativeEvent.layout);
+        }
+      }}
     />
   );
 };
@@ -166,17 +192,26 @@ export default function Game() {
   const [draggedIndex, setDraggedIndex] = useState<number>(-1);
   const [activeDividerIndex, setActiveDividerIndex] = useState<number>(-1);
   
+  // NEW: Track where each letter from the available word was placed in the current word
+  const [placedLetterPositions, setPlacedLetterPositions] = useState<Map<number, number>>(new Map());
+  
   // NEW: Track the last placed letter's original index
   const [lastPlacedLetterIndices, setLastPlacedLetterIndices] = useState<number[]>([]);
   
-  // NEW: Track where each letter from the available word was placed in the current word
-  const [placedLetterPositions, setPlacedLetterPositions] = useState<Map<number, number>>(new Map());
+  // NEW: Store detected words
+  const [detectedWords, setDetectedWords] = useState<DetectedWord[]>([]);
+  
+  // NEW: Game completion state
+  const [gameCompleted, setGameCompleted] = useState<boolean>(false);
+  
+  // NEW: Track divider positions
+  const [dividerPositions, setDividerPositions] = useState<Map<number, { x: number, y: number, width: number, height: number }>>(new Map());
   
   // Refs for the word container
   const wordContainerRef = useRef<View>(null);
   const wordContainerLayout = useRef({ x: 0, y: 0, width: 0, height: 0 });
   
-  // NEW: Helper to check if a letter is enabled for dragging
+  // Helper to check if a letter is enabled for dragging
   const isLetterEnabled = useCallback((originalIndex: number) => {
     if (lastPlacedLetterIndices.length === 0) {
       // If no letter has been placed yet, ALL letters are enabled
@@ -193,7 +228,7 @@ export default function Game() {
     return false;
   }, [lastPlacedLetterIndices]);
   
-  // NEW: Helper to check if a divider is valid for the current state
+  // Helper to check if a divider is valid for the current state
   const isDividerValid = useCallback((dividerIndex: number) => {
     if (lastPlacedLetterIndices.length === 0) {
       // If no letter has been placed yet, ALL positions are valid
@@ -408,11 +443,13 @@ export default function Game() {
     }
   }, [currentWord]);
 
-  // Measure word container for positioning
-  const handleWordContainerLayout = useCallback((event: any) => {
-    const { x, y, width, height } = event.nativeEvent.layout;
-    wordContainerLayout.current = { x, y, width, height };
-    if (DEBUG) console.log(`Word container: x=${x}, y=${y}, w=${width}, h=${height}`);
+  // NEW: Handle divider layout
+  const handleDividerLayout = useCallback((index: number, layout: { x: number, y: number, width: number, height: number }) => {
+    setDividerPositions(prev => {
+      prev.set(index, layout);
+      return prev;
+    });
+    if (DEBUG) console.log(`Divider ${index} layout: x=${layout.x}, y=${layout.y}, w=${layout.width}, h=${layout.height}`);
   }, []);
 
   // Find closest divider based on pointer position
@@ -430,41 +467,41 @@ export default function Game() {
       return;
     }
     
-    // Calculate the distance from the left edge of the container
-    const relativeX = x - containerLeft;
-    
-    // Estimate divider positions based on equal spacing
-    const totalDividers = currentWord.size() + 1;
-    const containerWidth = wordContainerLayout.current.width;
-    const approximateDividerSpace = containerWidth / totalDividers;
-    
-    // Find the closest divider
+    // Find the closest divider using actual measured positions
     let closestIndex = -1;
     let closestDistance = Number.MAX_VALUE;
     
-    for (let i = 0; i < totalDividers; i++) {
-      // UPDATED: Skip invalid dividers
-      if (!isDividerValid(i)) {
-        continue;
+    // If we have divider positions measured, use them for accurate detection
+    if (dividerPositions.size > 0) {
+      for (const [index, layout] of dividerPositions.entries()) {
+        // Skip invalid dividers
+        if (!isDividerValid(index)) {
+          continue;
+        }
+        
+        // Calculate distance to this divider
+        // Use the divider's center point
+        const dividerX = containerLeft + layout.x + (layout.width / 2);
+        const distance = Math.abs(x - dividerX);
+        
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = index;
+        }
       }
       
-      const dividerPosition = i * approximateDividerSpace;
-      const distance = Math.abs(relativeX - dividerPosition);
-      
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        closestIndex = i;
+      // Only activate if within a reasonable distance (use a fixed threshold)
+      const activationThreshold = 50; // Adjust as needed
+      if (closestDistance < activationThreshold) {
+        setActiveDividerIndex(closestIndex);
+      } else {
+        setActiveDividerIndex(-1);
       }
     }
-    
-    // Only activate if within a reasonable distance
-    const activationThreshold = approximateDividerSpace / 3;
-    if (closestDistance < activationThreshold) {
-      setActiveDividerIndex(closestIndex);
-    } else {
-      setActiveDividerIndex(-1);
+    else {
+        setActiveDividerIndex(-1);
     }
-  }, [currentWord.size(), isDividerValid]);
+  }, [currentWord.size(), isDividerValid, dividerPositions]);
   
   // Handle drop
   const handleDrop = useCallback((): void => {
@@ -499,10 +536,219 @@ export default function Game() {
     setActiveDividerIndex(-1);
   }, [handleDrop]);
 
+  // NEW: Function to detect valid words in the current word
+  const detectWords = useCallback(() => {
+    const letters = currentWord.getLetters();
+    const wordString = letters.map(l => l.value).join('').toLowerCase();
+    
+    // Find all possible subwords
+    const foundWords: DetectedWord[] = [];
+    
+    // Check all possible substrings
+    for (let start = 0; start < wordString.length; start++) {
+      for (let end = start + MIN_WORD_LENGTH; end <= wordString.length; end++) {
+        const subword = wordString.substring(start, end);
+        
+        // Check if this is a valid word from our dictionary
+        if (DICTIONARY.has(subword)) {
+          // Make sure this word contains at least one added letter
+          let containsAddedLetter = false;
+          for (let i = start; i < end; i++) {
+            if (letters[i].initialPosition === undefined) {
+              containsAddedLetter = true;
+              break;
+            }
+          }
+          
+          if (containsAddedLetter) {
+            foundWords.push({
+              word: subword,
+              startIndex: start,
+              endIndex: end - 1
+            });
+          }
+        }
+      }
+    }
+    
+    // Sort words by length (longest first)
+    foundWords.sort((a, b) => b.word.length - a.word.length);
+    
+    setDetectedWords(foundWords);
+  }, [currentWord]);
+  
+  // NEW: Check for valid words after each letter placement
+  useEffect(() => {
+    if (lastPlacedLetterIndices.length > 0) {
+      detectWords();
+    }
+    
+    // Check if game is completed - all added letters have been removed from the current word
+    // and there are no more available letters to be placed
+    const onlyInitialLettersLeft = currentWord.getLetters().every(letter => 
+      letter.initialPosition !== undefined
+    );
+    
+    const noAvailableLetters = availableWord.getLetters().every(letter => 
+      !letter.isAvailable || letter.isCompleted
+    );
+    
+    if (onlyInitialLettersLeft && noAvailableLetters) {
+      setGameCompleted(true);
+    }
+  }, [currentWord, lastPlacedLetterIndices, availableWord, detectWords]);
+  
+  // NEW: Simple function to remove a detected word
+  const handleRemoveWord = useCallback((wordToRemove: DetectedWord) => {
+    const letters = currentWord.getLetters();
+    const addedLetterIndices: number[] = [];
+    
+    // Find which letters in the word range were added (for marking as completed)
+    for (let i = wordToRemove.startIndex; i <= wordToRemove.endIndex; i++) {
+      const letter = letters[i];
+      if (letter.initialPosition === undefined && letter.originalIndex !== undefined) {
+        addedLetterIndices.push(letter.originalIndex);
+      }
+    }
+    
+    // 1. First, create the new current word by excluding the letters in the detected word
+    const initialLetters = currentWord.getLetters().filter((letter, index) => {
+      // Keep this letter if it's not part of the detected word range
+      return index < wordToRemove.startIndex || index > wordToRemove.endIndex;
+    });
+    
+    // 2. Mark the letters used in the word as completed in available word
+    const updatedAvailableLetters = availableWord.getLetters().map((letter) => {
+      if (letter.originalIndex !== undefined && addedLetterIndices.includes(letter.originalIndex)) {
+        return {
+          ...letter,
+          isAvailable: false,
+          isCompleted: true
+        };
+      }
+      return letter;
+    });
+    
+    // 3. Reset all tracking data
+    const newPlacedLetterIndices = lastPlacedLetterIndices.filter(
+      idx => !addedLetterIndices.includes(idx)
+    );
+    
+    const newPlacedLetterPositions = new Map(placedLetterPositions);
+    addedLetterIndices.forEach(idx => {
+      newPlacedLetterPositions.delete(idx);
+    });
+    
+    // 4. Make all state updates at once
+    setDetectedWords([]);
+    
+    const newCurrentWord = new Word('');
+    newCurrentWord.letters = initialLetters;
+    setCurrentWord(newCurrentWord);
+    
+    const newAvailableWord = new Word('');
+    newAvailableWord.letters = updatedAvailableLetters;
+    setAvailableWord(newAvailableWord);
+    
+    setLastPlacedLetterIndices(newPlacedLetterIndices);
+    setPlacedLetterPositions(newPlacedLetterPositions);
+    
+    // 5. After a delay, re-check for words
+    setTimeout(() => {
+      const updatedCurrentWord = initialLetters;
+      if (updatedCurrentWord.length > 0) {
+        const wordString = updatedCurrentWord.map(l => l.value).join('').toLowerCase();
+        
+        // Find all possible subwords
+        const foundWords: DetectedWord[] = [];
+        
+        // Check all possible substrings
+        for (let start = 0; start < wordString.length; start++) {
+          for (let end = start + MIN_WORD_LENGTH; end <= wordString.length; end++) {
+            const subword = wordString.substring(start, end);
+            
+            // Check if this is a valid word from our dictionary
+            if (DICTIONARY.has(subword)) {
+              // Make sure this word contains at least one added letter
+              let containsAddedLetter = false;
+              for (let i = start; i < end; i++) {
+                if (updatedCurrentWord[i].initialPosition === undefined) {
+                  containsAddedLetter = true;
+                  break;
+                }
+              }
+              
+              if (containsAddedLetter) {
+                foundWords.push({
+                  word: subword,
+                  startIndex: start,
+                  endIndex: end - 1
+                });
+              }
+            }
+          }
+        }
+        
+        // Sort words by length (longest first)
+        foundWords.sort((a, b) => b.word.length - a.word.length);
+        
+        setDetectedWords(foundWords);
+      }
+    }, 100);
+  }, [currentWord, availableWord, lastPlacedLetterIndices, placedLetterPositions]);
+
+  // Measure word container for positioning
+  const handleWordContainerLayout = useCallback((event: any) => {
+    const { x, y, width, height } = event.nativeEvent.layout;
+    wordContainerLayout.current = { x, y, width, height };
+    if (DEBUG) console.log(`Word container: x=${x}, y=${y}, w=${width}, h=${height}`);
+  }, []);
+
+  // Reset divider positions when a letter is placed or removed
+  useEffect(() => {
+    // Clear divider positions when the word structure changes
+    setDividerPositions(new Map());
+  }, [currentWord]);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.container}>
         <Text style={styles.title}>Word Surgery</Text>
+        
+        {/* Game completed message */}
+        {gameCompleted && (
+          <View style={styles.gameCompletedContainer}>
+            <Text style={styles.gameCompletedText}>Game Completed!</Text>
+            <Button 
+              title="Play Again" 
+              onPress={() => {
+                // Reset game state
+                setCurrentWord(() => {
+                  const word = new Word('voiture');
+                  word.letters = word.letters.map((letter, index) => ({
+                    ...letter,
+                    initialPosition: index
+                  }));
+                  return word;
+                });
+                
+                setAvailableWord(() => {
+                  const word = new Word('verrat');
+                  word.letters = word.letters.map((letter, index) => ({
+                    ...letter,
+                    originalIndex: index
+                  }));
+                  return word;
+                });
+                
+                setLastPlacedLetterIndices([]);
+                setPlacedLetterPositions(new Map());
+                setDetectedWords([]);
+                setGameCompleted(false);
+              }}
+            />
+          </View>
+        )}
         
         {/* Current Word with Dividers */}
         <View 
@@ -515,6 +761,7 @@ export default function Game() {
             <Divider 
               index={0}
               isActive={activeDividerIndex === 0}
+              onLayout={throttle(handleDividerLayout, 1000, { leading: true, trailing: true })}
             />
           )}
           
@@ -524,7 +771,11 @@ export default function Game() {
               <TouchableOpacity 
                 style={[
                   styles.letterBox,
-                  letter.initialPosition !== undefined && styles.initialLetterBox
+                  letter.initialPosition !== undefined && styles.initialLetterBox,
+                  // NEW: Add green underline for letters that are part of detected words
+                  detectedWords.some(word => 
+                    index >= word.startIndex && index <= word.endIndex
+                  ) && styles.detectedWordLetter
                 ]}
                 onPress={() => handleLetterTap(letter, index)}
                 // Disable for initial letters
@@ -545,11 +796,35 @@ export default function Game() {
                 <Divider 
                   index={index + 1}
                   isActive={activeDividerIndex === index + 1}
+                  onLayout={throttle(handleDividerLayout, 1000, { leading: true, trailing: true })}
                 />
               )}
             </React.Fragment>
           ))}
         </View>
+
+        {/* Detected Words List - Add disabled state to prevent multiple clicks */}
+        {detectedWords.length > 0 && (
+          <View style={styles.detectedWordsContainer}>
+            <Text style={styles.detectedWordsTitle}>Detected Words:</Text>
+            {detectedWords.map((word, index) => (
+              <View key={`word-${index}`} style={styles.detectedWordItem}>
+                <Text style={styles.detectedWordText}>{word.word}</Text>
+                <TouchableOpacity
+                  style={styles.removeButton}
+                  onPress={() => {
+                    // Clear UI first
+                    setDetectedWords([]);
+                    // Then do the actual removal
+                    setTimeout(() => handleRemoveWord(word), 50);
+                  }}
+                >
+                  <Text style={styles.removeButtonText}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* Available Letters (Draggable) */}
         <View style={styles.availableLettersContainer}>
@@ -558,9 +833,18 @@ export default function Game() {
               return (
                 <View 
                   key={`available-${index}`} 
-                  style={[styles.availableLetterBox, styles.disabledLetterBox]}
+                  style={[
+                    styles.availableLetterBox, 
+                    styles.disabledLetterBox,
+                    letter.isCompleted && styles.completedLetterBox
+                  ]}
                 >
-                  <Text style={[styles.letterText, styles.disabledLetterText]}>{letter.value}</Text>
+                  <Text style={[
+                    styles.letterText,
+                    letter.isCompleted && styles.completedLetterText
+                  ]}>
+                    {letter.value}
+                  </Text>
                 </View>
               );
             }
@@ -646,6 +930,14 @@ const styles = StyleSheet.create({
     disabledLetterText: {
         color: '#f0f0f0',
     },
+    completedLetterBox: {
+        backgroundColor: '#C5E1A5', // Light green for completed letters
+        borderColor: '#7CB342',
+    },
+    completedLetterText: {
+        color: '#2E7D32', // Dark green for text in completed letters
+        fontWeight: 'bold',
+    },
     disabledDraggableLetterBox: {
         backgroundColor: '#e0e0e0',
     },
@@ -668,5 +960,61 @@ const styles = StyleSheet.create({
     divider: {
         marginHorizontal: 3,
         borderRadius: 2,
+    },
+    // NEW STYLES
+    detectedWordLetter: {
+        borderBottomWidth: 3,
+        borderBottomColor: '#4CAF50', // green
+    },
+    detectedWordsContainer: {
+        marginTop: 16,
+        width: '100%',
+        padding: 8,
+        backgroundColor: '#f9f9f9',
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#ddd',
+    },
+    detectedWordsTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 8,
+    },
+    detectedWordItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginVertical: 4,
+        padding: 8,
+        backgroundColor: '#fff',
+        borderRadius: 4,
+        borderLeftWidth: 4,
+        borderLeftColor: '#4CAF50',
+    },
+    detectedWordText: {
+        fontSize: 16,
+    },
+    removeButton: {
+        backgroundColor: '#f44336',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 4,
+    },
+    removeButtonText: {
+        color: 'white',
+        fontWeight: 'bold',
+    },
+    gameCompletedContainer: {
+        marginTop: 16,
+        padding: 16,
+        backgroundColor: '#4CAF50',
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    gameCompletedText: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: 'white',
+        marginBottom: 8,
     },
 });

@@ -5,16 +5,19 @@ import Game from './components/Game';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 export default function App() {
+  const selectedLanguage = null;
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <View style={styles.container}>
-            <Game />
+              <Game />
           </View>
         </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {

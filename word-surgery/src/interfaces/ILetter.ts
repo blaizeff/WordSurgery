@@ -3,4 +3,5 @@ export interface ILetter {
     isAvailable: boolean;
     initialPosition: number | undefined;
     originalIndex?: number;
+    isCompleted?: boolean;
 }
