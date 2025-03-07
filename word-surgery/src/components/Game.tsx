@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from "react";
-import { View, Text, StyleSheet, Dimensions } from "react-native";
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from "react-native";
 import { Word } from "src/classes/Word";
 import { 
   GestureHandlerRootView, 
@@ -14,7 +14,7 @@ import Animated, {
   withTiming,
   Easing
 } from 'react-native-reanimated';
-import { Letter } from "../interfaces/Letter";
+import { ILetter } from "../interfaces/ILetter";
 
 // For debug purposes
 const DEBUG = true;
@@ -28,11 +28,12 @@ const DIVIDER_HEIGHT = 60;
 
 // Props for draggable letter component
 interface DraggableLetterProps {
-  letter: string;
+  letter: ILetter;
   index: number;
   onDragStart: (index: number) => void;
   onDragMove: (x: number, y: number) => void;
   onDragEnd: () => void;
+  isDisabled?: boolean;
 }
 
 // Props for divider component
@@ -47,7 +48,8 @@ const DraggableLetter: React.FC<DraggableLetterProps> = ({
   index,
   onDragStart, 
   onDragMove, 
-  onDragEnd
+  onDragEnd,
+  isDisabled = false
 }) => {
   // Animation values
   const translateX = useSharedValue(0);
@@ -58,8 +60,9 @@ const DraggableLetter: React.FC<DraggableLetterProps> = ({
   
   // Pan gesture handler
   const panGesture = Gesture.Pan()
+    .enabled(!isDisabled)
     .onBegin(() => {
-      if (DEBUG) console.log(`Starting drag for letter ${letter} at index ${index}`);
+      if (DEBUG) console.log(`Starting drag for letter ${letter.value} at index ${index}`);
       scale.value = withSpring(1.1);
       opacity.value = withSpring(0.8);
       zIndex.value = 100;
@@ -75,8 +78,8 @@ const DraggableLetter: React.FC<DraggableLetterProps> = ({
         event.absoluteY
       );
     })
-    .onEnd(() => {
-      if (DEBUG) console.log(`Ending drag for letter ${letter}`);
+    .onFinalize(() => {
+      if (DEBUG) console.log(`Ending drag for letter ${letter.value}`);
       translateX.value = withSpring(0);
       translateY.value = withSpring(0);
       scale.value = withSpring(1);
@@ -103,10 +106,11 @@ const DraggableLetter: React.FC<DraggableLetterProps> = ({
       <Animated.View 
         style={[
           styles.availableLetterBox,
+          isDisabled && styles.disabledDraggableLetterBox,
           animatedStyle
         ]}
       >
-        <Text style={styles.letterText}>{letter}</Text>
+        <Text style={[styles.letterText, isDisabled && styles.disabledDraggableLetterText]}>{letter.value}</Text>
       </Animated.View>
     </GestureDetector>
   );
@@ -140,25 +144,152 @@ const Divider: React.FC<DividerProps> = ({ index, isActive }) => {
 
 export default function Game() {
   // State
-  const [currentWord, setCurrentWord] = useState<string>('voiture');
-  const [availableWord, setAvailableWord] = useState<Word>(new Word('tortue'));
+  const [currentWord, setCurrentWord] = useState<Word>(() => {
+    // Initialize the current word with marked initial letters
+    const word = new Word('voiture');
+    word.letters = word.letters.map((letter, index) => ({
+      ...letter,
+      initialPosition: index // Mark as an initial letter
+    }));
+    return word;
+  });
+  const [availableWord, setAvailableWord] = useState<Word>(() => {
+    // Initialize available word with sequence information
+    const word = new Word('verrat');
+    word.letters = word.letters.map((letter, index) => ({
+      ...letter,
+      originalIndex: index // Track original position
+    }));
+    return word;
+  });
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [draggedIndex, setDraggedIndex] = useState<number>(-1);
   const [activeDividerIndex, setActiveDividerIndex] = useState<number>(-1);
+  
+  // NEW: Track the last placed letter's original index
+  const [lastPlacedLetterIndices, setLastPlacedLetterIndices] = useState<number[]>([]);
+  
+  // NEW: Track where each letter from the available word was placed in the current word
+  const [placedLetterPositions, setPlacedLetterPositions] = useState<Map<number, number>>(new Map());
   
   // Refs for the word container
   const wordContainerRef = useRef<View>(null);
   const wordContainerLayout = useRef({ x: 0, y: 0, width: 0, height: 0 });
   
-  // Handlers
-  const handleInsertLetter = useCallback((letter: string, insertIndex: number): void => {
-    if (DEBUG) console.log(`Inserting letter ${letter} at index ${insertIndex}`);
+  // NEW: Helper to check if a letter is enabled for dragging
+  const isLetterEnabled = useCallback((originalIndex: number) => {
+    if (lastPlacedLetterIndices.length === 0) {
+      // If no letter has been placed yet, ALL letters are enabled
+      return true;
+    }
     
+    // Check if this letter is adjacent to ANY previously placed letter
+    for (const placedIndex of lastPlacedLetterIndices) {
+      if (Math.abs(originalIndex - placedIndex) === 1) {
+        return true;
+      }
+    }
+    
+    return false;
+  }, [lastPlacedLetterIndices]);
+  
+  // NEW: Helper to check if a divider is valid for the current state
+  const isDividerValid = useCallback((dividerIndex: number) => {
+    if (lastPlacedLetterIndices.length === 0) {
+      // If no letter has been placed yet, ALL positions are valid
+      return true;
+    }
+    
+    // If not dragging a letter, no dividers are valid
+    if (draggedIndex === -1) {
+      return false;
+    }
+    
+    // Get the original index of the letter being dragged
+    const draggedLetter = availableWord.getLetters()[draggedIndex];
+    if (!draggedLetter || draggedLetter.originalIndex === undefined) {
+      return false;
+    }
+    
+    const draggedOriginalIndex = draggedLetter.originalIndex;
+    
+    // Find an adjacent previously placed letter
+    let adjacentPlacedIndex: number | null = null;
+    let adjacentPlacedPosition: number | null = null;
+    
+    for (const placedIndex of lastPlacedLetterIndices) {
+      if (Math.abs(draggedOriginalIndex - placedIndex) === 1) {
+        adjacentPlacedIndex = placedIndex;
+        adjacentPlacedPosition = placedLetterPositions.get(placedIndex) ?? -1;
+        if (adjacentPlacedPosition !== -1) {
+          break; // Found a valid adjacent letter with known position
+        }
+      }
+    }
+    
+    // If no adjacent letter was found, this letter shouldn't be draggable
+    if (adjacentPlacedIndex === null || adjacentPlacedPosition === null || adjacentPlacedPosition === -1) {
+      return false;
+    }
+    
+    // Determine if the letter should be placed before or after its adjacent letter
+    if (draggedOriginalIndex < adjacentPlacedIndex) {
+      // If the dragged letter comes before the adjacent letter in the original sequence,
+      // it should be placed immediately before it in the current word
+      return dividerIndex === adjacentPlacedPosition;
+    } else {
+      // If it comes after, it should be placed immediately after
+      return dividerIndex === adjacentPlacedPosition + 1;
+    }
+  }, [lastPlacedLetterIndices, placedLetterPositions, draggedIndex, availableWord]);
+  
+  // Handlers
+  const handleInsertLetter = useCallback((letter: ILetter, insertIndex: number): void => {
+    if (DEBUG) console.log(`Inserting letter ${letter.value} at index ${insertIndex}`);
+    
+    // FIXED: Create a new Word instance and update state properly
     setCurrentWord(prev => {
-      const wordArray = prev.split('');
-      wordArray.splice(insertIndex, 0, letter);
-      return wordArray.join('');
+      const newWord = new Word('');
+      const letters = [...prev.getLetters()];
+      
+      // Insert the letter at the specified index without initial position
+      // but preserve the originalIndex for tracking
+      const newLetter = {
+        ...letter, 
+        initialPosition: undefined
+      };
+      letters.splice(insertIndex, 0, newLetter);
+      newWord.letters = letters;
+      
+      return newWord;
     });
+    
+    // Update tracking of placed letters
+    if (letter.originalIndex !== undefined) {
+      // Add to the list of placed letter indices
+      setLastPlacedLetterIndices(prev => {
+        if (letter.originalIndex !== undefined) {
+          return [...prev, letter.originalIndex];
+        }
+        return prev;
+      });
+      
+      // Update the mapping of where this letter was placed
+      setPlacedLetterPositions(prev => {
+        const newMap = new Map(prev);
+        if (letter.originalIndex !== undefined) {
+          newMap.set(letter.originalIndex, insertIndex);
+          
+          // Adjust positions for letters that come after the insertion point
+          newMap.forEach((position, originalIndex) => {
+            if (position >= insertIndex && originalIndex !== letter.originalIndex) {
+              newMap.set(originalIndex, position + 1);
+            }
+          });
+        }
+        return newMap;
+      });
+    }
   }, []);
 
   const handleRemoveLetter = useCallback((index: number): void => {
@@ -177,6 +308,105 @@ export default function Game() {
       return newAvailableWord;
     });
   }, []);
+  
+  // Handler to remove non-initial letters from current word when tapped
+  const handleLetterTap = useCallback((letter: ILetter, index: number): void => {
+    if (DEBUG) console.log(`Tapped letter ${letter.value} at index ${index}`);
+    
+    // Only allow removing letters that weren't initial (don't have initialPosition)
+    if (letter.initialPosition === undefined) {
+      // Get all the added letters and their positions
+      const currentLetters = currentWord.getLetters();
+      
+      // Find positions of added letters and their original indices
+      const addedLetters: { position: number; originalIndex: number | undefined }[] = [];
+      currentLetters.forEach((l, idx) => {
+        if (l.initialPosition === undefined) {
+          addedLetters.push({ 
+            position: idx, 
+            originalIndex: l.originalIndex 
+          });
+        }
+      });
+      
+      if (addedLetters.length === 0) return;
+      
+      // Sort added letters by their original index
+      addedLetters.sort((a, b) => {
+        return (a.originalIndex || 0) - (b.originalIndex || 0);
+      });
+      
+      // Only allow removing first or last letter in the sequence
+      const firstLetter = addedLetters[0];
+      const lastLetter = addedLetters[addedLetters.length - 1];
+      
+      const isFirstOrLast = 
+        index === firstLetter.position || 
+        index === lastLetter.position;
+        
+      if (!isFirstOrLast) {
+        if (DEBUG) console.log(`Can't remove letter at position ${index} as it's not at the edge of the sequence`);
+        return;
+      }
+      
+      // Get the original index of the letter being removed
+      const originalIndex = letter.originalIndex;
+      
+      // Remove from current word
+      setCurrentWord(prev => {
+        const newWord = new Word('');
+        const letters = [...prev.getLetters()];
+        letters.splice(index, 1);
+        newWord.letters = letters;
+        return newWord;
+      });
+      
+      // Update tracking of placed letters
+      if (originalIndex !== undefined) {
+        // Remove from the list of placed letter indices
+        setLastPlacedLetterIndices(prev => 
+          prev.filter(idx => idx !== originalIndex)
+        );
+        
+        // Update the positions map
+        setPlacedLetterPositions(prev => {
+          const newMap = new Map(prev);
+          // Remove this letter
+          newMap.delete(originalIndex);
+          
+          // Adjust positions for letters that come after the removal point
+          newMap.forEach((position, idx) => {
+            if (position > index) {
+              newMap.set(idx, position - 1);
+            }
+          });
+          
+          return newMap;
+        });
+      }
+      
+      // Add back to available words
+      setAvailableWord(prev => {
+        const newWord = new Word('');
+        const letters = [...prev.getLetters()];
+        
+        // Find the letter with matching originalIndex that's not available
+        const availableIndex = letters.findIndex(
+          l => l.originalIndex === originalIndex && !l.isAvailable
+        );
+        
+        if (availableIndex !== -1) {
+          letters[availableIndex] = {
+            ...letters[availableIndex],
+            isAvailable: true
+          };
+        }
+        
+        newWord.letters = letters;
+        return newWord;
+      });
+    }
+  }, [currentWord]);
 
   // Measure word container for positioning
   const handleWordContainerLayout = useCallback((event: any) => {
@@ -204,7 +434,7 @@ export default function Game() {
     const relativeX = x - containerLeft;
     
     // Estimate divider positions based on equal spacing
-    const totalDividers = currentWord.length + 1;
+    const totalDividers = currentWord.size() + 1;
     const containerWidth = wordContainerLayout.current.width;
     const approximateDividerSpace = containerWidth / totalDividers;
     
@@ -213,6 +443,11 @@ export default function Game() {
     let closestDistance = Number.MAX_VALUE;
     
     for (let i = 0; i < totalDividers; i++) {
+      // UPDATED: Skip invalid dividers
+      if (!isDividerValid(i)) {
+        continue;
+      }
+      
       const dividerPosition = i * approximateDividerSpace;
       const distance = Math.abs(relativeX - dividerPosition);
       
@@ -229,14 +464,14 @@ export default function Game() {
     } else {
       setActiveDividerIndex(-1);
     }
-  }, [currentWord.length]);
+  }, [currentWord.size(), isDividerValid]);
   
   // Handle drop
   const handleDrop = useCallback((): void => {
     if (activeDividerIndex >= 0 && draggedIndex >= 0) {
       const letters = availableWord.getLetters();
       if (letters && draggedIndex < letters.length) {
-        const letter = letters[draggedIndex].letter;
+        const letter = letters[draggedIndex];
         if (letter) {
           handleRemoveLetter(draggedIndex);
           handleInsertLetter(letter, activeDividerIndex);
@@ -276,21 +511,37 @@ export default function Game() {
           ref={wordContainerRef}
         >
           {/* First divider (before first letter) */}
-          {isDragging && (
+          {isDragging && isDividerValid(0) && (
             <Divider 
               index={0}
               isActive={activeDividerIndex === 0}
             />
           )}
           
-          {currentWord.split('').map((letter, index) => (
+          {currentWord.getLetters().map((letter, index) => (
             <React.Fragment key={`letter-${index}`}>
-              <View style={styles.letterBox}>
-                <Text style={styles.letterText}>{letter}</Text>
-              </View>
+              {/* UPDATED: Added TouchableOpacity for tap handling */}
+              <TouchableOpacity 
+                style={[
+                  styles.letterBox,
+                  letter.initialPosition !== undefined && styles.initialLetterBox
+                ]}
+                onPress={() => handleLetterTap(letter, index)}
+                // Disable for initial letters
+                disabled={letter.initialPosition !== undefined}
+              >
+                <Text 
+                  style={[
+                    styles.letterText,
+                    letter.initialPosition !== undefined ? styles.staticLetterText : null
+                  ]}
+                >
+                  {letter.value}
+                </Text>
+              </TouchableOpacity>
 
-              {/* Divider after each letter - only shown when dragging */}
-              {isDragging && (
+              {/* Divider after each letter - only shown when dragging and valid */}
+              {isDragging && isDividerValid(index + 1) && (
                 <Divider 
                   index={index + 1}
                   isActive={activeDividerIndex === index + 1}
@@ -309,19 +560,23 @@ export default function Game() {
                   key={`available-${index}`} 
                   style={[styles.availableLetterBox, styles.disabledLetterBox]}
                 >
-                  <Text style={styles.letterText}>{letter.letter}</Text>
+                  <Text style={[styles.letterText, styles.disabledLetterText]}>{letter.value}</Text>
                 </View>
               );
             }
             
+            // UPDATED: Add disabled state for letters that can't be placed yet
+            const enabled = isLetterEnabled(letter.originalIndex || 0);
+            
             return (
               <DraggableLetter
                 key={`draggable-${index}`}
-                letter={letter.letter}
+                letter={letter}
                 index={index}
                 onDragStart={handleDragStart}
                 onDragMove={handleDragMove}
                 onDragEnd={handleDragEnd}
+                isDisabled={!enabled}
               />
             );
           })}
@@ -362,9 +617,16 @@ const styles = StyleSheet.create({
         flexShrink: 1,
         borderRadius: 8
     },
+    initialLetterBox: {
+        borderWidth: 0,
+        backgroundColor: '#f8f8f8',
+    },
     letterText: {
         fontSize: 18,
         textAlign: 'center'
+    },
+    staticLetterText: {
+        color: 'black'
     },
     availableLetterBox: {
         borderWidth: 1,
@@ -379,7 +641,16 @@ const styles = StyleSheet.create({
         borderRadius: 8
     },
     disabledLetterBox: {
-        backgroundColor: 'lightgrey',
+        backgroundColor: 'transparent',
+    },
+    disabledLetterText: {
+        color: '#f0f0f0',
+    },
+    disabledDraggableLetterBox: {
+        backgroundColor: '#e0e0e0',
+    },
+    disabledDraggableLetterText: {
+        color: '#777',
     },
     availableLettersContainer: {
         flexDirection: 'row',

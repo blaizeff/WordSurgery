@@ -10,7 +10,6 @@ export default function App() {
         <SafeAreaProvider>
           <View style={styles.container}>
             <Game />
-            <StatusBar style="auto" />
           </View>
         </SafeAreaProvider>
     </GestureHandlerRootView>
