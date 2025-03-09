@@ -8,7 +8,8 @@ import {
   Modal, 
   Alert, 
   Image,
-  ScrollView
+  ScrollView,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Language } from '../hooks/useLanguage';
@@ -18,17 +19,19 @@ interface MenuProps {
   onSelectLanguage: (language: Language) => void;
   onAddCustomDictionary: (url: string) => Promise<void>;
   currentLanguage: Language;
+  isLoading: boolean;
 }
 
 const Menu: React.FC<MenuProps> = ({ 
   onStart, 
   onSelectLanguage, 
   onAddCustomDictionary, 
-  currentLanguage 
+  currentLanguage,
+  isLoading
 }) => {
   const [customUrl, setCustomUrl] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isAddingCustom, setIsAddingCustom] = useState(false);
 
   const handleSelectLanguage = (language: Language) => {
     onSelectLanguage(language);
@@ -41,14 +44,14 @@ const Menu: React.FC<MenuProps> = ({
     }
 
     try {
-      setIsLoading(true);
+      setIsAddingCustom(true);
       await onAddCustomDictionary(customUrl);
       setModalVisible(false);
       Alert.alert('Success', 'Custom dictionary loaded successfully!');
     } catch (error) {
       Alert.alert('Error', `Failed to load custom dictionary: ${error}`);
     } finally {
-      setIsLoading(false);
+      setIsAddingCustom(false);
     }
   };
 
@@ -60,62 +63,81 @@ const Menu: React.FC<MenuProps> = ({
           <Text style={styles.subtitle}>Select a language to start playing</Text>
         </View>
 
-        <View style={styles.languageOptions}>
-          <TouchableOpacity
-            style={[
-              styles.languageButton,
-              currentLanguage === 'english' && styles.selectedButton
-            ]}
-            onPress={() => handleSelectLanguage('english')}
-          >
-            <Text style={[
-              styles.buttonText,
-              currentLanguage === 'english' && styles.selectedButtonText
-            ]}>English</Text>
-          </TouchableOpacity>
+        {isLoading && !isAddingCustom ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#007bff" />
+            <Text style={styles.loadingText}>Loading dictionary...</Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.languageOptions}>
+              <TouchableOpacity
+                style={[
+                  styles.languageButton,
+                  currentLanguage === 'english' && styles.selectedButton
+                ]}
+                onPress={() => handleSelectLanguage('english')}
+                disabled={isLoading}
+              >
+                <Text style={[
+                  styles.buttonText,
+                  currentLanguage === 'english' && styles.selectedButtonText
+                ]}>English</Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[
-              styles.languageButton,
-              currentLanguage === 'french' && styles.selectedButton
-            ]}
-            onPress={() => handleSelectLanguage('french')}
-          >
-            <Text style={[
-              styles.buttonText,
-              currentLanguage === 'french' && styles.selectedButtonText
-            ]}>French</Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.languageButton,
+                  currentLanguage === 'french' && styles.selectedButton
+                ]}
+                onPress={() => handleSelectLanguage('french')}
+                disabled={isLoading}
+              >
+                <Text style={[
+                  styles.buttonText,
+                  currentLanguage === 'french' && styles.selectedButtonText
+                ]}>French</Text>
+              </TouchableOpacity>
 
-          {currentLanguage === 'custom' && (
+              {currentLanguage === 'custom' && (
+                <TouchableOpacity
+                  style={[
+                    styles.languageButton,
+                    currentLanguage === 'custom' && styles.selectedButton
+                  ]}
+                  onPress={() => handleSelectLanguage('custom')}
+                  disabled={isLoading}
+                >
+                  <Text style={[
+                    styles.buttonText,
+                    currentLanguage === 'custom' && styles.selectedButtonText
+                  ]}>Custom Dictionary</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={styles.customButton}
+              onPress={() => setModalVisible(true)}
+              disabled={isLoading}
+            >
+              <Text style={styles.customButtonText}>Add Custom Dictionary</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[
-                styles.languageButton,
-                currentLanguage === 'custom' && styles.selectedButton
+                styles.startButton,
+                isLoading && styles.disabledButton
               ]}
-              onPress={() => handleSelectLanguage('custom')}
+              onPress={onStart}
+              disabled={isLoading}
             >
-              <Text style={[
-                styles.buttonText,
-                currentLanguage === 'custom' && styles.selectedButtonText
-              ]}>Custom Dictionary</Text>
+              <Text style={styles.startButtonText}>
+                {isLoading ? 'Loading...' : 'Start Game'}
+              </Text>
             </TouchableOpacity>
-          )}
-        </View>
-
-        <TouchableOpacity
-          style={styles.customButton}
-          onPress={() => setModalVisible(true)}
-        >
-          <Text style={styles.customButtonText}>Add Custom Dictionary</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.startButton}
-          onPress={onStart}
-        >
-          <Text style={styles.startButtonText}>Start Game</Text>
-        </TouchableOpacity>
+          </>
+        )}
 
         <Modal
           visible={modalVisible}
@@ -143,7 +165,7 @@ const Menu: React.FC<MenuProps> = ({
                 <TouchableOpacity
                   style={[styles.modalButton, styles.cancelButton]}
                   onPress={() => setModalVisible(false)}
-                  disabled={isLoading}
+                  disabled={isAddingCustom}
                 >
                   <Text style={styles.modalButtonText}>Cancel</Text>
                 </TouchableOpacity>
@@ -151,10 +173,10 @@ const Menu: React.FC<MenuProps> = ({
                 <TouchableOpacity
                   style={[styles.modalButton, styles.addButton]}
                   onPress={handleAddCustomDictionary}
-                  disabled={isLoading}
+                  disabled={isAddingCustom}
                 >
                   <Text style={styles.modalButtonText}>
-                    {isLoading ? 'Loading...' : 'Add'}
+                    {isAddingCustom ? 'Loading...' : 'Add'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -313,6 +335,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#fff',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 50,
+  },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 16,
+    color: '#666',
+  },
+  disabledButton: {
+    backgroundColor: '#cccccc',
   },
 });
 

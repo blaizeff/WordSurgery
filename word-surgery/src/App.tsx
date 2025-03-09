@@ -9,7 +9,7 @@ import { useLanguage } from './hooks/useLanguage';
 
 export default function App() {
   const [showMenu, setShowMenu] = useState(true);
-  const { currentLanguage, words, setLanguage, addCustomDictionary } = useLanguage();
+  const { currentLanguage, words, isLoading, setLanguage, addCustomDictionary } = useLanguage();
 
   const handleStartGame = () => {
     setShowMenu(false);
@@ -30,10 +30,11 @@ export default function App() {
               onSelectLanguage={setLanguage}
               onAddCustomDictionary={addCustomDictionary}
               currentLanguage={currentLanguage}
+              isLoading={isLoading}
             />
           ) : (
             <Game
-              dictionary={words} 
+              dictionary={new Set(words)} 
               onBackToMenu={handleBackToMenu}
             />
           )}

@@ -161,7 +161,7 @@ const Divider: React.FC<DividerProps> = ({ index, isActive, onLayout }) => {
 
 // Add interface for Game props
 interface GameProps {
-  dictionary: string[];
+  dictionary: Set<string>;
   onBackToMenu?: () => void;
 }
 
@@ -208,6 +208,9 @@ export default function Game({ dictionary, onBackToMenu }: GameProps) {
   // Refs for the word container
   const wordContainerRef = useRef<View>(null);
   const wordContainerLayout = useRef({ x: 0, y: 0, width: 0, height: 0 });
+  
+  // Add this ref to track word changes
+  const currentWordStringRef = useRef<string>('');
   
   // Helper to check if a letter is enabled for dragging
   const isLetterEnabled = useCallback((originalIndex: number) => {
@@ -542,16 +545,30 @@ export default function Game({ dictionary, onBackToMenu }: GameProps) {
     // Find all possible subwords
     const foundWords: DetectedWord[] = [];
     
-    // Check all possible substrings
-    for (let start = 0; start < wordString.length; start++) {
-      for (let end = start + MIN_WORD_LENGTH; end <= wordString.length; end++) {
-        const subword = wordString.substring(start, end);
+    // Track regions that have been covered by longer words
+    const coveredRegions: { start: number, end: number }[] = [];
+    
+    // Check words in order from longest to shortest
+    for (let wordLength = wordString.length; wordLength >= MIN_WORD_LENGTH; wordLength--) {
+      // For each word length, check all possible positions
+      for (let startPos = 0; startPos <= wordString.length - wordLength; startPos++) {
+        const endPos = startPos + wordLength;
+        
+        // Skip if this region is already covered by a longer word
+        if (isRegionCovered(startPos, endPos, coveredRegions)) {
+          if (DEBUG) {
+            console.log(`Skipping region ${startPos}-${endPos} as it's covered`);
+          }
+          continue;
+        }
+        
+        const subword = wordString.substring(startPos, endPos);
         
         // Check if this is a valid word from our dictionary
-        if (dictionary.includes(subword)) {
+        if (dictionary.has(subword)) {
           // Make sure this word contains at least one added letter
           let containsAddedLetter = false;
-          for (let i = start; i < end; i++) {
+          for (let i = startPos; i < endPos; i++) {
             if (letters[i].initialPosition === undefined) {
               containsAddedLetter = true;
               break;
@@ -561,25 +578,72 @@ export default function Game({ dictionary, onBackToMenu }: GameProps) {
           if (containsAddedLetter) {
             foundWords.push({
               word: subword,
-              startIndex: start,
-              endIndex: end - 1
+              startIndex: startPos,
+              endIndex: endPos - 1
             });
+            
+            // Mark this region as covered to avoid finding subwords
+            coveredRegions.push({ start: startPos, end: endPos });
+            
+            if (DEBUG) {
+              console.log(`Found word: "${subword}" at ${startPos}-${endPos-1}`);
+            }
           }
         }
       }
     }
     
-    // Sort words by length (longest first)
-    foundWords.sort((a, b) => b.word.length - a.word.length);
-    
     setDetectedWords(foundWords);
   }, [currentWord, dictionary]);
   
+  // Helper function to check if a region is already covered by a longer word
+  const isRegionCovered = (start: number, end: number, regions: { start: number, end: number }[]): boolean => {
+    // A region is only considered "covered" if it is COMPLETELY CONTAINED within another region
+    // This means the entire word must be inside another word, not just overlapping
+    for (const region of regions) {
+      // For a region to be considered "contained":
+      // 1. It must start at or after another region's start
+      // 2. It must end at or before another region's end
+      // 3. It must NOT be exactly the same as the other region
+      const isContained = start >= region.start && end <= region.end;
+      const isExactMatch = start === region.start && end === region.end;
+
+      if (isContained && !isExactMatch) {
+        if (DEBUG) {
+          console.log(`Region ${start}-${end} is covered by ${region.start}-${region.end}`);
+        }
+        return true;
+      }
+    }
+    
+    if (DEBUG && regions.length > 0) {
+      console.log(`Region ${start}-${end} is NOT covered by any existing region`);
+    }
+    
+    return false;
+  };
+  
+  // NEW: Stable version of detectWords that doesn't change on every render
+  const stableDetectWords = useCallback(() => {
+    detectWords();
+  }, [detectWords]);
+  
+  // NEW: Throttled version of the detectWords function
+  const throttledDetectWords = useCallback(
+    throttle(() => {
+      detectWords();
+    }, 300),  // Only run at most once every 300ms
+    [detectWords]
+  );
+
   // NEW: Check for valid words after each letter placement
   useEffect(() => {
-    if (lastPlacedLetterIndices.length > 0) {
-      detectWords();
+    if (lastPlacedLetterIndices.length === 0 && currentWord.getLetters().length === 0) {
+      return;
     }
+    
+    // Use throttled version instead of direct call
+    throttledDetectWords();
     
     // Check if game is completed - all added letters have been removed from the current word
     // and there are no more available letters to be placed
@@ -594,7 +658,7 @@ export default function Game({ dictionary, onBackToMenu }: GameProps) {
     if (onlyInitialLettersLeft && noAvailableLetters) {
       setGameCompleted(true);
     }
-  }, [currentWord, lastPlacedLetterIndices, availableWord, detectWords]);
+  }, [lastPlacedLetterIndices, throttledDetectWords, currentWord, availableWord]);
   
   // NEW: Simple function to remove a detected word
   const handleRemoveWord = useCallback((wordToRemove: DetectedWord) => {
@@ -660,16 +724,33 @@ export default function Game({ dictionary, onBackToMenu }: GameProps) {
         // Find all possible subwords
         const foundWords: DetectedWord[] = [];
         
-        // Check all possible substrings
-        for (let start = 0; start < wordString.length; start++) {
-          for (let end = start + MIN_WORD_LENGTH; end <= wordString.length; end++) {
-            const subword = wordString.substring(start, end);
+        // Track regions that have been covered by longer words
+        const coveredRegions: { start: number, end: number }[] = [];
+        
+        // Get all possible word lengths to check, from longest to shortest
+        const wordLengths = [];
+        for (let len = wordString.length; len >= MIN_WORD_LENGTH; len--) {
+          wordLengths.push(len);
+        }
+        
+        // Check words in order from longest to shortest
+        for (const wordLength of wordLengths) {
+          // For each word length, check all possible positions
+          for (let startPos = 0; startPos <= wordString.length - wordLength; startPos++) {
+            const endPos = startPos + wordLength;
+            
+            // Skip if this region is already covered by a longer word
+            if (isRegionCovered(startPos, endPos, coveredRegions)) {
+              continue;
+            }
+            
+            const subword = wordString.substring(startPos, endPos);
             
             // Check if this is a valid word from our dictionary
-            if (dictionary.includes(subword)) {
+            if (dictionary.has(subword)) {
               // Make sure this word contains at least one added letter
               let containsAddedLetter = false;
-              for (let i = start; i < end; i++) {
+              for (let i = startPos; i < endPos; i++) {
                 if (updatedCurrentWord[i].initialPosition === undefined) {
                   containsAddedLetter = true;
                   break;
@@ -679,16 +760,16 @@ export default function Game({ dictionary, onBackToMenu }: GameProps) {
               if (containsAddedLetter) {
                 foundWords.push({
                   word: subword,
-                  startIndex: start,
-                  endIndex: end - 1
+                  startIndex: startPos,
+                  endIndex: endPos - 1
                 });
+                
+                // Mark this region as covered to avoid finding subwords
+                coveredRegions.push({ start: startPos, end: endPos });
               }
             }
           }
         }
-        
-        // Sort words by length (longest first)
-        foundWords.sort((a, b) => b.word.length - a.word.length);
         
         setDetectedWords(foundWords);
       }
@@ -707,6 +788,28 @@ export default function Game({ dictionary, onBackToMenu }: GameProps) {
     // Clear divider positions when the word structure changes
     setDividerPositions(new Map());
   }, [currentWord]);
+
+  // NEW: Immediate detection of words when current word changes due to letter removal
+  // This fixes the issue where detected word highlights weren't updating when a letter was removed
+  useEffect(() => {
+    // Skip initial render
+    if (currentWord.getLetters().length === 0) {
+      return;
+    }
+    
+    // Check current word against the ref to prevent unnecessary updates
+    const wordString = currentWord.getLetters().map(l => l.value).join('');
+    
+    if (currentWordStringRef.current === wordString) {
+      return;
+    }
+    
+    currentWordStringRef.current = wordString;
+    
+    // Detect words without throttling when a letter is removed
+    // This ensures highlights update immediately
+    stableDetectWords();
+  }, [currentWord, stableDetectWords]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
