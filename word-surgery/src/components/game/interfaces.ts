@@ -2,10 +2,20 @@ import { ILetter } from "../../interfaces/ILetter";
 import { Word } from "../../classes/Word";
 
 // Interface for detected words
-export interface DetectedWord {
+export class DetectedWord {
   word: string;
   startIndex: number;
   endIndex: number;
+
+  constructor(word: string, startIndex: number, endIndex: number) {
+    this.word = word;
+    this.startIndex = startIndex;
+    this.endIndex = endIndex;
+  }
+
+  valueOf(): string {
+    return this.word;
+  }
 }
 
 // Props for draggable letter component

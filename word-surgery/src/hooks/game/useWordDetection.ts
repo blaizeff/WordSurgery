@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Word } from "../../classes/Word";
+import { ILetter } from "../../interfaces/ILetter";
 import { throttle } from 'lodash';
 import { DetectedWord } from "../../components/game/interfaces";
 import { DEBUG, MIN_WORD_LENGTH, isRegionCovered } from "../../utils/gameUtils";
@@ -33,63 +34,121 @@ export function useWordDetection(
   // Ref to track word changes
   const currentWordStringRef = useRef<string>('');
   
+  // Helper function to check if segment contains added letters
+  const hasAddedLetter = (letters: ILetter[], start: number, end: number): boolean => {
+    for (let i = start; i <= end; i++) {
+      if (letters[i].initialPosition === undefined) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Memoization cache for detectWord function
+  const memoCache = new Map<string, DetectedWord[]>();
+  
+  const detectWord = (wordString: string, startIndex: number, endIndex: number): DetectedWord[] => {
+    // Create a unique key for this substring
+    const cacheKey = `${startIndex}-${endIndex}`;
+    
+    // Check if we've already computed this substring
+    if (memoCache.has(cacheKey)) {
+      return memoCache.get(cacheKey) || [];
+    }   
+
+    const currentSubstring = wordString.substring(startIndex, endIndex+1);
+    
+    // 1. Check if current substring is a valid word with at least one added letter
+    if (dictionary.has(currentSubstring) && 
+        hasAddedLetter(currentWord.getLetters(), startIndex, endIndex)) {
+      const result: DetectedWord[] = [{
+        word: currentSubstring,
+        startIndex,
+        endIndex
+      } as DetectedWord];
+      
+      if (DEBUG) {
+        console.log(`Found word: "${currentSubstring}" at ${startIndex}-${endIndex}`);
+      }
+      
+      // Store in cache and return - found a valid word
+      memoCache.set(cacheKey, result);
+      return result;
+    }
+    
+    // Base case: word is too short
+    if (endIndex - startIndex + 1 <= MIN_WORD_LENGTH) {
+      memoCache.set(cacheKey, []);
+      return [];
+    }
+    
+    // 3. Left part: substring(0, length-1)
+    let left: DetectedWord[] = detectWord(wordString, startIndex, endIndex - 1);
+    
+    // 4. Right part: substring(1, length)
+    let right: DetectedWord[] = detectWord(wordString, startIndex + 1, endIndex);
+    
+    // Combine results, store in cache and return
+    const combinedResults = [...left, ...right];
+    memoCache.set(cacheKey, combinedResults);
+    return combinedResults;
+  };
+  
   // Detect valid words in the current word
   const detectWords = useCallback(() => {
     const letters = currentWord.getLetters();
-    const wordString = letters.map(l => l.value).join('').toLowerCase();
+    if (letters.length === 0) return;
     
-    // Find all possible subwords
-    const foundWords: DetectedWord[] = [];
+    // If there are not enough letters to form a valid word, clear detected words and return
+    if (letters.length < MIN_WORD_LENGTH) {
+      setDetectedWords([]);
+      return;
+    }
     
-    // Track regions that have been covered by longer words
-    const coveredRegions: { start: number, end: number }[] = [];
-    
-    // Check words in order from longest to shortest
-    for (let wordLength = wordString.length; wordLength >= MIN_WORD_LENGTH; wordLength--) {
-      // For each word length, check all possible positions
-      for (let startPos = 0; startPos <= wordString.length - wordLength; startPos++) {
-        const endPos = startPos + wordLength;
-        
-        // Skip if this region is already covered by a longer word
-        if (isRegionCovered(startPos, endPos, coveredRegions)) {
-          if (DEBUG) {
-            console.log(`Skipping region ${startPos}-${endPos} as it's covered`);
-          }
-          continue;
-        }
-        
-        const subword = wordString.substring(startPos, endPos);
-        
-        // Check if this is a valid word from our dictionary
-        if (dictionary.has(subword)) {
-          // Make sure this word contains at least one added letter
-          let containsAddedLetter = false;
-          for (let i = startPos; i < endPos; i++) {
-            if (letters[i].initialPosition === undefined) {
-              containsAddedLetter = true;
-              break;
-            }
-          }
-          
-          if (containsAddedLetter) {
-            foundWords.push({
-              word: subword,
-              startIndex: startPos,
-              endIndex: endPos - 1
-            });
-            
-            // Mark this region as covered to avoid finding subwords
-            coveredRegions.push({ start: startPos, end: endPos });
-            
-            if (DEBUG) {
-              console.log(`Found word: "${subword}" at ${startPos}-${endPos-1}`);
-            }
-          }
-        }
+    // Check if there are any added letters at all - if not, no need to detect
+    let hasAnyAddedLetters = false;
+    for (const letter of letters) {
+      if (letter.initialPosition === undefined) {
+        hasAnyAddedLetters = true;
+        break;
       }
     }
     
-    setDetectedWords(foundWords);
+    if (!hasAnyAddedLetters) {
+      setDetectedWords([]);
+      return;
+    }
+    
+    const wordString = letters.map(l => l.value).join('').toLowerCase();
+    
+    // Get all words
+    const allWordsArray = detectWord(wordString, 0, wordString.length - 1);
+    
+    if (DEBUG) {
+      memoCache.forEach((value, key) => {
+        console.log('!!!! KEY:',key, 'VALUE:',value);
+      });
+    }
+    
+    memoCache.clear();
+    
+    // Filter out words that are completely contained within other words
+    const filteredWords = Array.from(new Set<DetectedWord>(allWordsArray)).filter((word1) => {
+      // Keep this word if no other word completely contains it
+      return !allWordsArray.some((word2) => 
+        // Only compare with different words
+        word1 !== word2 && 
+        // Check if word1 is completely contained within word2
+        word1.startIndex >= word2.startIndex && 
+        word1.endIndex <= word2.endIndex
+      );
+    });
+    
+    if (DEBUG) {
+      console.log(`Found ${allWordsArray.length} words in total, filtered to ${filteredWords.length}`);
+    }
+    
+    setDetectedWords(filteredWords);
   }, [currentWord, dictionary]);
   
   // Stable version of detectWords that doesn't change on every render
@@ -149,6 +208,9 @@ export function useWordDetection(
     // 4. Make all state updates at once
     setDetectedWords([]);
     
+    // Clear the memoCache to prevent redetection of removed words
+    memoCache.clear();
+    
     const newCurrentWord = new Word('');
     newCurrentWord.letters = initialLetters;
     setCurrentWord(newCurrentWord);
@@ -160,66 +222,16 @@ export function useWordDetection(
     setLastPlacedLetterIndices(newPlacedLetterIndices);
     setPlacedLetterPositions(newPlacedLetterPositions);
     
-    // 5. After a delay, re-check for words
-    setTimeout(() => {
-      const updatedCurrentWord = initialLetters;
-      if (updatedCurrentWord.length > 0) {
-        const wordString = updatedCurrentWord.map(l => l.value).join('').toLowerCase();
-        
-        // Find all possible subwords
-        const foundWords: DetectedWord[] = [];
-        
-        // Track regions that have been covered by longer words
-        const coveredRegions: { start: number, end: number }[] = [];
-        
-        // Get all possible word lengths to check, from longest to shortest
-        const wordLengths = [];
-        for (let len = wordString.length; len >= MIN_WORD_LENGTH; len--) {
-          wordLengths.push(len);
-        }
-        
-        // Check words in order from longest to shortest
-        for (const wordLength of wordLengths) {
-          // For each word length, check all possible positions
-          for (let startPos = 0; startPos <= wordString.length - wordLength; startPos++) {
-            const endPos = startPos + wordLength;
-            
-            // Skip if this region is already covered by a longer word
-            if (isRegionCovered(startPos, endPos, coveredRegions)) {
-              continue;
-            }
-            
-            const subword = wordString.substring(startPos, endPos);
-            
-            // Check if this is a valid word from our dictionary
-            if (dictionary.has(subword)) {
-              // Make sure this word contains at least one added letter
-              let containsAddedLetter = false;
-              for (let i = startPos; i < endPos; i++) {
-                if (updatedCurrentWord[i].initialPosition === undefined) {
-                  containsAddedLetter = true;
-                  break;
-                }
-              }
-              
-              if (containsAddedLetter) {
-                foundWords.push({
-                  word: subword,
-                  startIndex: startPos,
-                  endIndex: endPos - 1
-                });
-                
-                // Mark this region as covered to avoid finding subwords
-                coveredRegions.push({ start: startPos, end: endPos });
-              }
-            }
-          }
-        }
-        
-        setDetectedWords(foundWords);
-      }
-    }, 100);
-  }, [currentWord, availableWord, lastPlacedLetterIndices, placedLetterPositions, dictionary, setCurrentWord, setAvailableWord, setLastPlacedLetterIndices, setPlacedLetterPositions]);
+    // Only re-check for words if we have enough letters left
+    if (initialLetters.length >= MIN_WORD_LENGTH) {
+      // Use a longer delay to ensure UI updates first
+      setTimeout(() => {
+        // Clear cache again right before detection to ensure fresh detection
+        memoCache.clear();
+        stableDetectWords();
+      }, 300);
+    }
+  }, [currentWord, availableWord, lastPlacedLetterIndices, placedLetterPositions, dictionary, setCurrentWord, setAvailableWord, setLastPlacedLetterIndices, setPlacedLetterPositions, stableDetectWords]);
 
   // Check for valid words after each letter placement
   useEffect(() => {
