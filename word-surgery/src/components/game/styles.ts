@@ -4,20 +4,25 @@ export const gameStyles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 16,
+    marginBottom: 32,
+    marginTop: 0,
+    
     textAlign: 'center'
   },
   container: {
     alignItems: 'center',
     width: '100%',
-    padding: 16
+    flex: 1,
+    padding: 16,
+    marginTop: 20
   },
   wordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    padding: 16
+    padding: 16,
+    marginTop: 64
   },
   letterBox: {
     borderWidth: 1,
@@ -52,13 +57,14 @@ export const gameStyles = StyleSheet.create({
     height: 60,
     margin: 2,
     flexShrink: 1,
-    borderRadius: 8
+    borderRadius: 8,
   },
   disabledLetterBox: {
     backgroundColor: 'transparent',
+    borderWidth: 0,
   },
   disabledLetterText: {
-    color: '#f0f0f0',
+    color: 'rgb(150, 150, 150)',
   },
   completedLetterBox: {
     backgroundColor: '#C5E1A5', // Light green for completed letters
@@ -69,7 +75,8 @@ export const gameStyles = StyleSheet.create({
     fontWeight: 'bold',
   },
   disabledDraggableLetterBox: {
-    backgroundColor: '#e0e0e0',
+    backgroundColor: 'rgb(230, 230, 230)',
+    borderWidth: 0,
   },
   disabledDraggableLetterText: {
     color: '#777',
@@ -81,11 +88,12 @@ export const gameStyles = StyleSheet.create({
     flexWrap: 'wrap',
     marginHorizontal: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: 'lightgrey',
     backgroundColor: '#f0f0f0',
     borderRadius: 8,
-    marginTop: 16
+    marginTop: 16,
+    marginBottom: 32,
+    position: 'absolute',
+    bottom: 0,
   },
   divider: {
     marginHorizontal: 3,
@@ -148,15 +156,18 @@ export const gameStyles = StyleSheet.create({
   },
   backButton: {
     position: 'absolute',
-    top: 10,
-    left: 10,
+    top: 16,
+    left: 16,
     padding: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
     borderRadius: 8,
     zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   backButtonText: {
-    color: '#007bff',
+    color: 'black',
     fontWeight: '500',
   },
 }); 

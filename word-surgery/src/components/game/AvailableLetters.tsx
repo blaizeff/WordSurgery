@@ -26,6 +26,7 @@ const AvailableLetters: React.FC<AvailableLettersProps> = ({
             >
               <Text style={[
                 gameStyles.letterText,
+                gameStyles.disabledLetterText,
                 letter.isCompleted && gameStyles.completedLetterText
               ]}>
                 {letter.value}

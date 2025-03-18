@@ -5,7 +5,7 @@ const MIN_WORD_LENGTH = 3;
 // Maximum word length to include (very long words are rarely used in the game)
 const MAX_WORD_LENGTH = 15;
 
-export type Language = 'english' | 'french' | 'custom';
+export type Language = 'en' | 'fr' | 'custom';
 
 export interface LanguageState {
   currentLanguage: Language;
@@ -16,7 +16,7 @@ export interface LanguageState {
 }
 
 export const useLanguage = (): LanguageState => {
-  const [currentLanguage, setCurrentLanguage] = useState<Language>('english');
+  const [currentLanguage, setCurrentLanguage] = useState<Language>('en');
   const [words, setWords] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [customDictionaryUrl, setCustomDictionaryUrl] = useState<string | null>(null);
@@ -27,9 +27,9 @@ export const useLanguage = (): LanguageState => {
         setIsLoading(true);
         let allWords: string[] = [];
 
-        if (currentLanguage === 'english') {
+        if (currentLanguage === 'en') {
           allWords = require('an-array-of-english-words');
-        } else if (currentLanguage === 'french') {
+        } else if (currentLanguage === 'fr') {
           allWords = require('an-array-of-french-words');
         } else if (currentLanguage === 'custom' && customDictionaryUrl) {
           // Fetch custom dictionary from provided URL
@@ -53,8 +53,8 @@ export const useLanguage = (): LanguageState => {
       } catch (error) {
         console.error('Error loading dictionary:', error);
         // Fallback to English if there's an error
-        if (currentLanguage !== 'english') {
-          setCurrentLanguage('english');
+        if (currentLanguage !== 'en') {
+          setCurrentLanguage('en');
         }
       } finally {
         setIsLoading(false);

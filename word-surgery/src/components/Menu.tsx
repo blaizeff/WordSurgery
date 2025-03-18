@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Language } from '../hooks/useLanguage';
+import { useTranslation } from 'src/hooks/useTranslation';
 
 interface MenuProps {
   onStart: () => void;
@@ -32,9 +33,15 @@ const Menu: React.FC<MenuProps> = ({
   const [customUrl, setCustomUrl] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [isAddingCustom, setIsAddingCustom] = useState(false);
-
+  const [localLoading, setLocalLoading] = useState(false);
+  const { t } = useTranslation(currentLanguage);
+  
   const handleSelectLanguage = (language: Language) => {
-    onSelectLanguage(language);
+    setLocalLoading(true);
+    setTimeout(() => {
+      onSelectLanguage(language);
+      setLocalLoading(false);
+    }, 0);
   };
 
   const handleAddCustomDictionary = async () => {
@@ -55,135 +62,159 @@ const Menu: React.FC<MenuProps> = ({
     }
   };
 
+  const isCurrentlyLoading = isLoading || localLoading || isAddingCustom;
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Word Surgery</Text>
-          <Text style={styles.subtitle}>Select a language to start playing</Text>
+      <View style={styles.contentContainer}>
+        <View style={styles.topContent}>
+          <View style={styles.header}>
+            <Text style={styles.title}>{t('menu.title')}</Text>
+            <Text style={styles.subtitle}>{t('menu.subtitle')}</Text>
+          </View>
         </View>
 
-        {isLoading && !isAddingCustom ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007bff" />
-            <Text style={styles.loadingText}>Loading dictionary...</Text>
-          </View>
-        ) : (
-          <>
-            <View style={styles.languageOptions}>
+        <View style={styles.bottomContent}>
+          {isCurrentlyLoading ? (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color="#3A63ED" />
+              <Text style={styles.loadingText}>{t('menu.loading')}</Text>
+            </View>
+          ) : null}
+
+          <View style={[
+            styles.languageOptions,
+            isCurrentlyLoading && styles.disabledContent
+          ]}>
+            <View style={styles.languageToggleContainer}>
               <TouchableOpacity
                 style={[
-                  styles.languageButton,
-                  currentLanguage === 'english' && styles.selectedButton
+                  styles.languageToggleButton,
+                  currentLanguage === 'en' && styles.selectedToggleButton
                 ]}
-                onPress={() => handleSelectLanguage('english')}
-                disabled={isLoading}
+                onPress={() => handleSelectLanguage('en')}
+                disabled={isCurrentlyLoading}
               >
                 <Text style={[
-                  styles.buttonText,
-                  currentLanguage === 'english' && styles.selectedButtonText
-                ]}>English</Text>
+                  styles.toggleButtonText,
+                  currentLanguage === 'en' && styles.selectedToggleButtonText
+                ]}>{t('menu.button_english')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[
-                  styles.languageButton,
-                  currentLanguage === 'french' && styles.selectedButton
+                  styles.languageToggleButton,
+                  currentLanguage === 'fr' && styles.selectedToggleButton
                 ]}
-                onPress={() => handleSelectLanguage('french')}
-                disabled={isLoading}
+                onPress={() => handleSelectLanguage('fr')}
+                disabled={isCurrentlyLoading}
               >
                 <Text style={[
-                  styles.buttonText,
-                  currentLanguage === 'french' && styles.selectedButtonText
-                ]}>French</Text>
+                  styles.toggleButtonText,
+                  currentLanguage === 'fr' && styles.selectedToggleButtonText
+                ]}>{t('menu.button_french')}</Text>
               </TouchableOpacity>
 
               {currentLanguage === 'custom' && (
                 <TouchableOpacity
                   style={[
-                    styles.languageButton,
-                    currentLanguage === 'custom' && styles.selectedButton
+                    styles.languageToggleButton,
+                    currentLanguage === 'custom' && styles.selectedToggleButton
                   ]}
                   onPress={() => handleSelectLanguage('custom')}
-                  disabled={isLoading}
+                  disabled={isCurrentlyLoading}
                 >
                   <Text style={[
-                    styles.buttonText,
-                    currentLanguage === 'custom' && styles.selectedButtonText
-                  ]}>Custom Dictionary</Text>
+                    styles.toggleButtonText,
+                    currentLanguage === 'custom' && styles.selectedToggleButtonText
+                  ]}>{t('menu.button_custom_dictionary')}</Text>
                 </TouchableOpacity>
               )}
             </View>
 
-            <TouchableOpacity
-              style={styles.customButton}
-              onPress={() => setModalVisible(true)}
-              disabled={isLoading}
-            >
-              <Text style={styles.customButtonText}>Add Custom Dictionary</Text>
-            </TouchableOpacity>
+            {currentLanguage !== 'custom' && (
+              <TouchableOpacity
+                style={styles.customDictionaryLink}
+                onPress={() => setModalVisible(true)}
+                disabled={isCurrentlyLoading}
+              >
+                <Text style={styles.customDictionaryLinkText}>{t('menu.button_add_dictionary')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
+          {currentLanguage === 'custom' && (
             <TouchableOpacity
               style={[
-                styles.startButton,
-                isLoading && styles.disabledButton
+                styles.customButton,
+                isCurrentlyLoading && styles.disabledContent
               ]}
-              onPress={onStart}
-              disabled={isLoading}
+              onPress={() => setModalVisible(true)}
+              disabled={isCurrentlyLoading}
             >
-              <Text style={styles.startButtonText}>
-                {isLoading ? 'Loading...' : 'Start Game'}
-              </Text>
+              <Text style={styles.customButtonText}>{t('menu.button_add_dictionary')}</Text>
             </TouchableOpacity>
-          </>
-        )}
+          )}
 
-        <Modal
-          visible={modalVisible}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setModalVisible(false)}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Add Custom Dictionary</Text>
-              <Text style={styles.modalSubtitle}>
-                Enter the URL of a JSON file containing an array of words
-              </Text>
+          <TouchableOpacity
+            style={[
+              styles.startButton,
+              isCurrentlyLoading && styles.disabledButton
+            ]}
+            onPress={onStart}
+            disabled={isCurrentlyLoading}
+          >
+            <Text style={styles.startButtonText}>
+              {t('menu.button_start_game')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <Modal
+        visible={modalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>{t('menu.modal_title')}</Text>
+            <Text style={styles.modalSubtitle}>
+              {t('menu.modal_subtitle')}
+            </Text>
+            
+            <TextInput
+              style={styles.input}
+              placeholder="https://example.com/dictionary.json"
+              value={customUrl}
+              onChangeText={setCustomUrl}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setModalVisible(false)}
+                disabled={isAddingCustom}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
               
-              <TextInput
-                style={styles.input}
-                placeholder="https://example.com/dictionary.json"
-                value={customUrl}
-                onChangeText={setCustomUrl}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton]}
-                  onPress={() => setModalVisible(false)}
-                  disabled={isAddingCustom}
-                >
-                  <Text style={styles.modalButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.addButton]}
-                  onPress={handleAddCustomDictionary}
-                  disabled={isAddingCustom}
-                >
-                  <Text style={styles.modalButtonText}>
-                    {isAddingCustom ? 'Loading...' : 'Add'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.addButton]}
+                onPress={handleAddCustomDictionary}
+                disabled={isAddingCustom}
+              >
+                <Text style={styles.modalButtonText}>
+                  {isAddingCustom ? 'Loading...' : 'Add'}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </Modal>
-      </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -192,16 +223,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+    paddingHorizontal: 20,
   },
-  scrollContent: {
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '100%',
+  contentContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  topContent: {
+    paddingTop: 60,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
   },
   title: {
     fontSize: 32,
@@ -213,33 +245,52 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
+    marginBottom: 20,
+  },
+  bottomContent: {
+    paddingBottom: 40,
   },
   languageOptions: {
-    width: '100%',
-    marginBottom: 30,
-  },
-  languageButton: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
+    width: '80%',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    marginBottom: 30,
+    alignSelf: 'center',
   },
-  selectedButton: {
-    backgroundColor: '#007bff',
+  languageToggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 25,
+    marginBottom: 10,
+    overflow: 'hidden',
+    width: '100%',
+    alignSelf: 'center',
   },
-  buttonText: {
-    fontSize: 18,
+  languageToggleButton: {
+    flex: 1,
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectedToggleButton: {
+    backgroundColor: '#000',
+    borderRadius: 25,
+  },
+  toggleButtonText: {
+    fontSize: 16,
     fontWeight: '500',
     color: '#333',
   },
-  selectedButtonText: {
+  selectedToggleButtonText: {
     color: '#fff',
+  },
+  customDictionaryLink: {
+    padding: 8,
+    marginBottom: 15,
+  },
+  customDictionaryLinkText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
   },
   customButton: {
     backgroundColor: '#f0f0f0',
@@ -257,8 +308,8 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   startButton: {
-    backgroundColor: '#28a745',
-    borderRadius: 10,
+    backgroundColor: '#3A63ED',
+    borderRadius: 100,
     padding: 18,
     width: '100%',
     alignItems: 'center',
@@ -267,6 +318,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
+    marginBottom: 10,
   },
   startButtonText: {
     fontSize: 20,
@@ -316,38 +368,59 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
+    marginTop: 10,
   },
   modalButton: {
-    borderRadius: 8,
     padding: 12,
     width: '48%',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   cancelButton: {
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#ddd',
+    backgroundColor: 'transparent',
   },
   addButton: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#3A63ED',
+    borderRadius: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   modalButtonText: {
     fontSize: 16,
     fontWeight: '500',
     color: '#fff',
   },
-  loadingContainer: {
-    alignItems: 'center',
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#666',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
-    marginVertical: 50,
+    alignItems: 'center',
+    zIndex: 10,
+    backgroundColor: 'rgba(245, 245, 245, 0.7)',
+    borderRadius: 15,
   },
   loadingText: {
-    marginTop: 20,
+    marginTop: 15,
     fontSize: 16,
     color: '#666',
+    fontWeight: '500',
   },
   disabledButton: {
     backgroundColor: '#cccccc',
+  },
+  disabledContent: {
+    opacity: 0.5,
   },
 });
 

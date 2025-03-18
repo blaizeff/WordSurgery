@@ -9,6 +9,7 @@ import AvailableLetters from "./AvailableLetters";
 import DetectedWordsList from "./DetectedWordsList";
 import { useDragDrop } from "../../hooks/game/useDragDrop";
 import { useWordDetection } from "../../hooks/game/useWordDetection";
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function Game({ dictionary, onBackToMenu }: GameProps) {
   // Create refs
@@ -103,7 +104,8 @@ export default function Game({ dictionary, onBackToMenu }: GameProps) {
             style={gameStyles.backButton}
             onPress={onBackToMenu}
           >
-            <Text style={gameStyles.backButtonText}>← Back to Menu</Text>
+            <Ionicons name="arrow-back" size={16} color="black" />
+            <Text style={gameStyles.backButtonText}>Back</Text>
           </TouchableOpacity>
         )}
         
