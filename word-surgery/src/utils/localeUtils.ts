@@ -12,6 +12,9 @@ export interface LocaleMap {
 
 export const localeMap: LocaleMap = {
     en: {
+        splash: {
+            loading: "Loading...",
+        },
         menu: {
             title: "Word Surgery",
             subtitle: "Select a language to start playing",
@@ -26,6 +29,9 @@ export const localeMap: LocaleMap = {
         }
     },
     fr: {
+        splash: {
+            loading: "Chargement...",
+        },
         menu: {
             title: "Word Surgery",
             subtitle: "Sélectionnez une langue pour commencer",

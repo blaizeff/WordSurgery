@@ -1,7 +1,8 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { Word } from "../../classes/Word";
 import { ILetter } from "../../interfaces/ILetter";
 import { DEBUG } from "../../utils/gameUtils";
+import { memoize } from "lodash";
 
 export interface UseDragDropReturn {
   currentWord: Word;
@@ -287,14 +288,21 @@ export function useDragDrop(initialWord: Word, initialAvailableWord: Word): UseD
   }, [currentWord]);
 
   // Handle divider layout
-  const handleDividerLayout = useCallback((index: number, layout: { x: number, y: number, width: number, height: number }) => {
-    setDividerPositions(prev => {
-      const newMap = new Map(prev);
-      newMap.set(index, layout);
-      return newMap;
-    });
-    if (DEBUG) console.log(`Divider ${index} layout: x=${layout.x}, y=${layout.y}, w=${layout.width}, h=${layout.height}`);
-  }, []);
+  const handleDividerLayout = useCallback(
+    memoize(
+      (index: number, layout: { x: number; y: number; width: number; height: number }) => {
+        setDividerPositions(prev => {
+          const newMap = new Map(prev);
+          newMap.set(index, layout);
+          return newMap;
+        });
+        if (DEBUG) console.log(`Divider ${index} layout: x=${layout.x}, y=${layout.y}, w=${layout.width}, h=${layout.height}`);
+      },
+      // Use both word size and index as the cache key
+      (index, layout) => `${currentWord.size()}_${index}`
+    ),
+    [currentWord.size()]
+  );
 
   // Find closest divider based on pointer position
   const findClosestDivider = useCallback((x: number, y: number) => {

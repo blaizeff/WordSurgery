@@ -27,7 +27,7 @@ const CurrentWord: React.FC<CurrentWordProps> = ({
         <LetterDivider 
           index={0}
           isActive={activeDividerIndex === 0}
-          onLayout={throttle(handleDividerLayout, 1000, { leading: true, trailing: true })}
+          onLayout={handleDividerLayout}
         />
       )}
       
@@ -62,7 +62,7 @@ const CurrentWord: React.FC<CurrentWordProps> = ({
             <LetterDivider 
               index={index + 1}
               isActive={activeDividerIndex === index + 1}
-              onLayout={throttle(handleDividerLayout, 1000, { leading: true, trailing: true })}
+              onLayout={handleDividerLayout}
             />
           )}
         </React.Fragment>

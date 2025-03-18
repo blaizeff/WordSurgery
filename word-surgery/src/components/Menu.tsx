@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -9,7 +9,8 @@ import {
   Alert, 
   Image,
   ScrollView,
-  ActivityIndicator
+  ActivityIndicator,
+  Animated
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Language } from '../hooks/useLanguage';
@@ -36,12 +37,32 @@ const Menu: React.FC<MenuProps> = ({
   const [localLoading, setLocalLoading] = useState(false);
   const { t } = useTranslation(currentLanguage);
   
+  // Declare isCurrentlyLoading state early so it can be used in the useEffect hook
+  const isCurrentlyLoading = isLoading || localLoading || isAddingCustom;
+  
   const handleSelectLanguage = (language: Language) => {
+    // If we're already in a loading state, do nothing
+    if (isCurrentlyLoading) return;
+    
+    // Start loading immediately
     setLocalLoading(true);
+    
+    // Call the language change handler
+    onSelectLanguage(language);
+    
+    // Keep local loading state active until the actual loading state is updated
+    // This ensures UI feedback for the duration of the loading process
+    const checkLoadingInterval = setInterval(() => {
+      if (!isLoading) {
+        setLocalLoading(false);
+        clearInterval(checkLoadingInterval);
+      }
+    }, 200);
+    
+    // Ensure cleanup if component unmounts during loading
     setTimeout(() => {
-      onSelectLanguage(language);
-      setLocalLoading(false);
-    }, 0);
+      clearInterval(checkLoadingInterval);
+    }, 10000); // Safety timeout (10 seconds)
   };
 
   const handleAddCustomDictionary = async () => {
@@ -61,8 +82,6 @@ const Menu: React.FC<MenuProps> = ({
       setIsAddingCustom(false);
     }
   };
-
-  const isCurrentlyLoading = isLoading || localLoading || isAddingCustom;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -207,9 +226,11 @@ const Menu: React.FC<MenuProps> = ({
                 onPress={handleAddCustomDictionary}
                 disabled={isAddingCustom}
               >
-                <Text style={styles.modalButtonText}>
-                  {isAddingCustom ? 'Loading...' : 'Add'}
-                </Text>
+                {isAddingCustom ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalButtonText}>Add</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -407,7 +428,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
-    backgroundColor: 'rgba(245, 245, 245, 0.7)',
+    backgroundColor: 'rgba(245, 245, 245, 0.8)',
     borderRadius: 15,
   },
   loadingText: {
