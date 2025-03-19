@@ -16,7 +16,8 @@ export const gameStyles = StyleSheet.create({
     width: '100%',
     flex: 1,
     padding: 16,
-    marginTop: 20
+    marginTop: 20,
+    paddingBottom: 150,
   },
   wordContainer: {
     flexDirection: 'row',
@@ -92,10 +93,9 @@ export const gameStyles = StyleSheet.create({
     padding: 16,
     backgroundColor: '#f0f0f0',
     borderRadius: 8,
-    marginTop: 16,
+    marginTop: 0,
     marginBottom: 32,
-    position: 'absolute',
-    bottom: 0,
+    width: '95%',
   },
   divider: {
     marginHorizontal: 3,
@@ -113,6 +113,7 @@ export const gameStyles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#ddd',
+    marginBottom: 160,
   },
   detectedWordsTitle: {
     fontSize: 18,
@@ -142,6 +143,34 @@ export const gameStyles = StyleSheet.create({
   removeButtonText: {
     color: 'white',
     fontWeight: 'bold',
+  },
+  undoButton: {
+    flexDirection: 'row',
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center', 
+    alignSelf: 'center',
+    marginTop: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  undoButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  bottomContainer: {
+    position: 'absolute',
+    bottom: 0,
+    width: '100%',
+    alignItems: 'center',
   },
   gameCompletedContainer: {
     flex: 1,
