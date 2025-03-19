@@ -38,6 +38,7 @@ export interface DividerProps {
 // Add interface for Game props
 export interface GameProps {
   dictionary: Set<string>;
+  dictArray: string[];
   onBackToMenu?: () => void;
 }
 

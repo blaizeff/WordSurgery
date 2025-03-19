@@ -10,7 +10,7 @@ import Splash from './components/Splash';
 
 export default function App() {
   const [showMenu, setShowMenu] = useState(true);
-  const { currentLanguage, words, isLoading, setLanguage, addCustomDictionary } = useLanguage();
+  const { currentLanguage, words, wordsArray, isLoading, setLanguage, addCustomDictionary } = useLanguage();
   const [appReady, setAppReady] = useState(false);
   const [splashVisible, setSplashVisible] = useState(true);
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -55,6 +55,7 @@ export default function App() {
           ) : (
             <Game
               dictionary={words} 
+              dictArray={wordsArray}
               onBackToMenu={handleBackToMenu}
             />
           )}

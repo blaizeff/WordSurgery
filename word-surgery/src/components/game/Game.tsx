@@ -12,31 +12,96 @@ import { useDragDrop } from "../../hooks/game/useDragDrop";
 import { useWordDetection } from "../../hooks/game/useWordDetection";
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-// Game duration in seconds (2 minutes)
-const GAME_DURATION = 15; // 2 minutes
+// Debug mode for testing
+const DEBUG_MODE = false;
 
-export default function Game({ dictionary, onBackToMenu }: GameProps) {
+// Game duration in seconds (2 minutes)
+const GAME_DURATION = DEBUG_MODE ? 15 : 120; // 2 minutes or 15 seconds in debug mode
+
+// Min/max word length constraints
+const MIN_WORD_LENGTH = 5;
+const MAX_WORD_LENGTH = 8;
+
+export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps) {
   // Create refs and states
   const wordContainerRef = useRef<View>(null);
   const confettiRef = useRef<LottieView>(null);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
   const [gameCompleted, setGameCompleted] = useState<boolean>(false);
   const [timeRemaining, setTimeRemaining] = useState<number>(GAME_DURATION);
   const [gameActive, setGameActive] = useState<boolean>(true);
   const [timeUp, setTimeUp] = useState<boolean>(false);
   
-  // Initialize words
-  const initialCurrentWord = new Word('voiture');
-  initialCurrentWord.letters = initialCurrentWord.letters.map((letter, index) => ({
-    ...letter,
-    initialPosition: index // Mark as an initial letter
-  }));
+  // Word generation functions
+  const generateRandomWords = useCallback(() => {
+    console.log('Generating random words');
+    // Pick two random words that meet the length criteria
+    const maxAttempts = 1000;
+
+    const firstIndex = Math.floor(Math.random() * (dictArray.length - maxAttempts));
+    const secondIndex = Math.floor(Math.random() * (dictArray.length - maxAttempts));
+
+    for (let i = firstIndex; i < firstIndex + maxAttempts; i++) {
+      // Randomly sample words from dictionary
+      const word1 = dictArray[i];
+      if (word1.length < MIN_WORD_LENGTH || word1.length > MAX_WORD_LENGTH) {
+        console.log('Invalid word length:', word1);
+        continue;
+      }
+      for (let j = secondIndex; j < secondIndex + maxAttempts; j++) {
+        const word2 = dictArray[j];
+        if (word2.length < MIN_WORD_LENGTH || word2.length > MAX_WORD_LENGTH) {
+          console.log('Invalid word length:', word2);
+          continue;
+        }
+      
+        // Create Word objects
+        const currentWordObj = new Word(word1);
+        const availableWordObj = new Word(word2);
+        
+        console.log('Selected random word pair:', word1, word2);
+        
+        // Add initial position to current word's letters
+        currentWordObj.letters = currentWordObj.letters.map((letter, index) => ({
+          ...letter,
+          initialPosition: index
+        }));
+        
+        // Add original index to available word's letters
+        availableWordObj.letters = availableWordObj.letters.map((letter, index) => ({
+          ...letter,
+          originalIndex: index
+        }));
+        
+        return { currentWord: currentWordObj, availableWord: availableWordObj };
+      }
+    }
+    
+    // Fallback if randomization doesn't work for some reason
+    console.warn('Using fallback words');
+    const fallbackCurrent = new Word('voiture');
+    fallbackCurrent.letters = fallbackCurrent.letters.map((letter, index) => ({
+      ...letter,
+      initialPosition: index
+    }));
+    
+    const fallbackAvailable = new Word('verrat');
+    fallbackAvailable.letters = fallbackAvailable.letters.map((letter, index) => ({
+      ...letter,
+      originalIndex: index
+    }));
+    
+    return { 
+      currentWord: fallbackCurrent, 
+      availableWord: fallbackAvailable
+    };
+  }, [dictArray]);
   
-  const initialAvailableWord = new Word('verrat');
-  initialAvailableWord.letters = initialAvailableWord.letters.map((letter, index) => ({
-    ...letter,
-    originalIndex: index // Track original position
-  }));
+  // Generate initial words
+  const [initialWords] = useState(() => generateRandomWords());
+  
+  // Initialize words
+  const initialCurrentWord = initialWords.currentWord;
+  const initialAvailableWord = initialWords.availableWord;
   
   // Use custom hooks
   const {
@@ -127,24 +192,12 @@ export default function Game({ dictionary, onBackToMenu }: GameProps) {
   
   // Reset game function
   const resetGame = () => {
-    // Reset all state
-    setCurrentWord(() => {
-      const word = new Word('voiture');
-      word.letters = word.letters.map((letter, index) => ({
-        ...letter,
-        initialPosition: index
-      }));
-      return word;
-    });
+    // Generate new random words
+    const newWords = generateRandomWords();
     
-    setAvailableWord(() => {
-      const word = new Word('verrat');
-      word.letters = word.letters.map((letter, index) => ({
-        ...letter,
-        originalIndex: index
-      }));
-      return word;
-    });
+    // Reset all state
+    setCurrentWord(() => newWords.currentWord);
+    setAvailableWord(() => newWords.availableWord);
     
     setLastPlacedLetterIndices([]);
     setPlacedLetterPositions(new Map());

@@ -15,6 +15,7 @@ const CUSTOM_URL_STORAGE_KEY = '@WordSurgery:customDictionaryUrl';
 export interface LanguageState {
   currentLanguage: Language;
   words: Set<string>;
+  wordsArray: string[];
   isLoading: boolean;
   setLanguage: (lang: Language) => void;
   addCustomDictionary: (url: string) => Promise<void>;
@@ -22,29 +23,29 @@ export interface LanguageState {
 
 // Define dictionaries outside to avoid blocking UI when file is first loaded
 // This will be lazily loaded when actually needed
-let englishDictionary: Set<string> | null = null;
-let frenchDictionary: Set<string> | null = null;
+let englishDictionary: Array<string> | null = null;
+let frenchDictionary: Array<string> | null = null;
 
 // Function to load dictionary asynchronously
 const loadDictionaryAsync = (
   language: Language, 
   customUrl: string | null,
-  callback: (words: Set<string>) => void,
+  callback: (words: Array<string>) => void,
   errorCallback: (error: Error) => void
 ) => {
   // Create a promise to load the dictionary
   const loadDictionary = async () => {
     try {
-      let allWords: Set<string> = new Set();
+      let allWords: Array<string> = [];
 
       if (language === 'en') {
         // Load English dictionary if not already loaded
         if (!englishDictionary) {
           // Use setTimeout to defer the heavy processing
-          englishDictionary = await new Promise<Set<string>>((resolve) => {
+          englishDictionary = await new Promise<Array<string>>((resolve) => {
             setTimeout(() => {
               const words = require('an-array-of-english-words');
-              resolve(new Set(words));
+              resolve(words);
             }, 0);
           });
         }
@@ -53,10 +54,10 @@ const loadDictionaryAsync = (
         // Load French dictionary if not already loaded
         if (!frenchDictionary) {
           // Use setTimeout to defer the heavy processing
-          frenchDictionary = await new Promise<Set<string>>((resolve) => {
+          frenchDictionary = await new Promise<Array<string>>((resolve) => {
             setTimeout(() => {
               const words = require('an-array-of-french-words');
-              resolve(new Set(words));
+              resolve(words);
             }, 0);
           });
         }
@@ -72,13 +73,13 @@ const loadDictionaryAsync = (
         const data = await response.json();
         
         if (Array.isArray(data)) {
-          allWords = new Set(data);
+          allWords = data;
         } else {
           throw new Error('Custom dictionary must be an array of words');
         }
       }
       
-      console.log(`Loaded ${allWords.size} words`);
+      console.log(`Loaded ${allWords.length} words`);
       callback(allWords);
     } catch (error) {
       console.error('Error loading dictionary:', error);
@@ -125,6 +126,7 @@ const loadLanguagePreference = async (): Promise<{ language: Language; customUrl
 export const useLanguage = (): LanguageState => {
   const [currentLanguage, setCurrentLanguage] = useState<Language>('en');
   const [words, setWords] = useState<Set<string>>(new Set());
+  const [wordsArray, setWordsArray] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [customDictionaryUrl, setCustomDictionaryUrl] = useState<string | null>(null);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
@@ -162,7 +164,8 @@ export const useLanguage = (): LanguageState => {
       customDictionaryUrl,
       (loadedWords) => {
         if (isMounted) {
-          setWords(loadedWords);
+          setWords(new Set(loadedWords));
+          setWordsArray(loadedWords);
           setIsLoading(false);
         }
       },
@@ -196,5 +199,5 @@ export const useLanguage = (): LanguageState => {
     setCurrentLanguage('custom');
   };
 
-  return { currentLanguage, words, isLoading, setLanguage, addCustomDictionary };
+  return { currentLanguage, words, wordsArray, isLoading, setLanguage, addCustomDictionary };
 };
