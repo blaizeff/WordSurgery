@@ -8,8 +8,6 @@ import { DEBUG, MIN_WORD_LENGTH, isRegionCovered } from "../../utils/gameUtils";
 export interface UseWordDetectionReturn {
   detectedWords: DetectedWord[];
   setDetectedWords: React.Dispatch<React.SetStateAction<DetectedWord[]>>;
-  gameCompleted: boolean;
-  setGameCompleted: React.Dispatch<React.SetStateAction<boolean>>;
   detectWords: () => void;
   stableDetectWords: () => void;
   throttledDetectWords: () => void;
@@ -29,7 +27,6 @@ export function useWordDetection(
 ): UseWordDetectionReturn {
   // State
   const [detectedWords, setDetectedWords] = useState<DetectedWord[]>([]);
-  const [gameCompleted, setGameCompleted] = useState<boolean>(false);
   
   // Ref to track word changes
   const currentWordStringRef = useRef<string>('');
@@ -221,17 +218,8 @@ export function useWordDetection(
     
     setLastPlacedLetterIndices(newPlacedLetterIndices);
     setPlacedLetterPositions(newPlacedLetterPositions);
-    
-    // Only re-check for words if we have enough letters left
-    if (initialLetters.length >= MIN_WORD_LENGTH) {
-      // Use a longer delay to ensure UI updates first
-      setTimeout(() => {
-        // Clear cache again right before detection to ensure fresh detection
-        memoCache.clear();
-        stableDetectWords();
-      }, 300);
-    }
-  }, [currentWord, availableWord, lastPlacedLetterIndices, placedLetterPositions, dictionary, setCurrentWord, setAvailableWord, setLastPlacedLetterIndices, setPlacedLetterPositions, stableDetectWords]);
+
+  }, [currentWord, availableWord, lastPlacedLetterIndices, placedLetterPositions, dictionary, setCurrentWord, setAvailableWord, setLastPlacedLetterIndices, setPlacedLetterPositions, detectWords]);
 
   // Check for valid words after each letter placement
   useEffect(() => {
@@ -241,21 +229,8 @@ export function useWordDetection(
     
     // Use throttled version instead of direct call
     throttledDetectWords();
-    
-    // Check if game is completed - all added letters have been removed from the current word
-    // and there are no more available letters to be placed
-    const onlyInitialLettersLeft = currentWord.getLetters().every(letter => 
-      letter.initialPosition !== undefined
-    );
-    
-    const noAvailableLetters = availableWord.getLetters().every(letter => 
-      !letter.isAvailable || letter.isCompleted
-    );
-    
-    if (onlyInitialLettersLeft && noAvailableLetters) {
-      setGameCompleted(true);
-    }
-  }, [lastPlacedLetterIndices, throttledDetectWords, currentWord, availableWord]);
+
+  }, [lastPlacedLetterIndices, throttledDetectWords, currentWord]);
   
   // Immediate detection of words when current word changes due to letter removal
   useEffect(() => {
@@ -281,8 +256,6 @@ export function useWordDetection(
   return {
     detectedWords,
     setDetectedWords,
-    gameCompleted,
-    setGameCompleted,
     detectWords,
     stableDetectWords,
     throttledDetectWords,
