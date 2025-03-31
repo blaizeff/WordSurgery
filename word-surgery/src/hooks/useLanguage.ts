@@ -1,14 +1,8 @@
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Minimum word length to include in the dictionary
-const MIN_WORD_LENGTH = 3;
-// Maximum word length to include (very long words are rarely used in the game)
-const MAX_WORD_LENGTH = 15;
-
 export type Language = 'en' | 'fr' | 'custom';
 
-// Storage key for user language preference
 const LANGUAGE_STORAGE_KEY = '@WordSurgery:language';
 const CUSTOM_URL_STORAGE_KEY = '@WordSurgery:customDictionaryUrl';
 
@@ -21,27 +15,21 @@ export interface LanguageState {
   addCustomDictionary: (url: string) => Promise<void>;
 }
 
-// Define dictionaries outside to avoid blocking UI when file is first loaded
-// This will be lazily loaded when actually needed
 let englishDictionary: Array<string> | null = null;
 let frenchDictionary: Array<string> | null = null;
 
-// Function to load dictionary asynchronously
 const loadDictionaryAsync = (
   language: Language, 
   customUrl: string | null,
   callback: (words: Array<string>) => void,
   errorCallback: (error: Error) => void
 ) => {
-  // Create a promise to load the dictionary
   const loadDictionary = async () => {
     try {
       let allWords: Array<string> = [];
 
       if (language === 'en') {
-        // Load English dictionary if not already loaded
         if (!englishDictionary) {
-          // Use setTimeout to defer the heavy processing
           englishDictionary = await new Promise<Array<string>>((resolve) => {
             setTimeout(() => {
               const words = require('an-array-of-english-words');
@@ -51,9 +39,7 @@ const loadDictionaryAsync = (
         }
         allWords = englishDictionary;
       } else if (language === 'fr') {
-        // Load French dictionary if not already loaded
         if (!frenchDictionary) {
-          // Use setTimeout to defer the heavy processing
           frenchDictionary = await new Promise<Array<string>>((resolve) => {
             setTimeout(() => {
               const words = require('an-array-of-french-words');
@@ -63,7 +49,6 @@ const loadDictionaryAsync = (
         }
         allWords = frenchDictionary;
       } else if (language === 'custom' && customUrl) {
-        // Fetch custom dictionary from provided URL
         const response = await fetch(customUrl);
         
         if (!response.ok) {
@@ -87,16 +72,13 @@ const loadDictionaryAsync = (
     }
   };
 
-  // Start loading the dictionary
   loadDictionary();
 };
 
-// Function to save language preference to AsyncStorage
 const saveLanguagePreference = async (language: Language, customUrl: string | null) => {
   try {
     await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, language);
     
-    // If the language is custom, also save the custom URL
     if (language === 'custom' && customUrl) {
       await AsyncStorage.setItem(CUSTOM_URL_STORAGE_KEY, customUrl);
     }
@@ -107,7 +89,6 @@ const saveLanguagePreference = async (language: Language, customUrl: string | nu
   }
 };
 
-// Function to load language preference from AsyncStorage
 const loadLanguagePreference = async (): Promise<{ language: Language; customUrl: string | null }> => {
   try {
     const savedLanguage = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY);
@@ -136,7 +117,6 @@ export const useLanguage = (): LanguageState => {
     const loadSavedPreference = async () => {
       const { language, customUrl } = await loadLanguagePreference();
       
-      // Only set the language if one was saved
       if (language) {
         setCurrentLanguage(language);
         if (language === 'custom' && customUrl) {
@@ -150,15 +130,13 @@ export const useLanguage = (): LanguageState => {
     loadSavedPreference();
   }, []);
 
-  // Load dictionary when language or custom URL changes
-  // Skip the first render if we haven't loaded preferences yet
+  // Load dictionary when language changes
   useEffect(() => {
     if (!initialLoadComplete) return;
     
     let isMounted = true;
     setIsLoading(true);
     
-    // Start the loading process asynchronously
     loadDictionaryAsync(
       currentLanguage,
       customDictionaryUrl,
@@ -172,7 +150,6 @@ export const useLanguage = (): LanguageState => {
       (error) => {
         console.error('Dictionary loading error:', error);
         if (isMounted) {
-          // Fallback to English if there's an error
           if (currentLanguage !== 'en') {
             setCurrentLanguage('en');
           } else {
@@ -182,7 +159,6 @@ export const useLanguage = (): LanguageState => {
       }
     );
     
-    // Save language preference when it changes
     saveLanguagePreference(currentLanguage, customDictionaryUrl);
     
     return () => {

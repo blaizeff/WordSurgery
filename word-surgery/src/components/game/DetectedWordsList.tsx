@@ -20,7 +20,6 @@ const DetectedWordsList: React.FC<DetectedWordsListProps> = ({
           <TouchableOpacity
             style={gameStyles.removeButton}
             onPress={() => {
-              // Clear UI first
               setTimeout(() => handleRemoveWord(word), 50);
             }}
           >

@@ -3,26 +3,22 @@ import { ActivityIndicator, Animated, Easing, StatusBar, View, StyleSheet, Text 
 import { useLanguage } from "../hooks/useLanguage";
 import { useTranslation } from "../hooks/useTranslation";
 
-
 export default function Splash({ setAppReady }: { setAppReady: (ready: boolean) => void }) {
   const { isLoading, words, currentLanguage } = useLanguage();
   const { t } = useTranslation(currentLanguage);
-  // Animation values for initial loading screen
+  
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
-  const spinAnim = useRef(new Animated.Value(0)).current;
   const [initialAnimationComplete, setInitialAnimationComplete] = useState(false);
   
   // Setup initial loading animation
   useEffect(() => {
-    // Start fade in animation
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 800,
       useNativeDriver: true,
     }).start();
     
-    // Start scale animation
     Animated.timing(scaleAnim, {
       toValue: 1,
       duration: 800,
@@ -30,30 +26,14 @@ export default function Splash({ setAppReady }: { setAppReady: (ready: boolean) 
     }).start(() => {
       setInitialAnimationComplete(true);
     });
-    
-    // Start spinning animation
-    Animated.loop(
-      Animated.timing(spinAnim, {
-        toValue: 1,
-        duration: 2000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, [fadeAnim, scaleAnim, spinAnim]);
+  }, [fadeAnim, scaleAnim]);
   
-  // Set app as ready when both dictionary is loaded and initial animation is complete
+  // Set app as ready when dictionary is loaded
   useEffect(() => {
     if (!isLoading && words.size > 0 && initialAnimationComplete) {
       setAppReady(true);
     }
   }, [isLoading, words, initialAnimationComplete, setAppReady]);
-  
-  // Create spinning rotation interpolation
-  const spin = spinAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
 
   return (
     <View style={styles.initialLoadingContainer}>
@@ -71,9 +51,7 @@ export default function Splash({ setAppReady }: { setAppReady: (ready: boolean) 
         >
         <Text style={styles.appTitle}>Word Surgery</Text>
         <View style={styles.loadingIconContainer}>
-            <Animated.View style={{ transform: [{ rotate: spin }] }}>
-            {isLoading ? <ActivityIndicator size="large" color="#3A63ED" /> : ""}
-            </Animated.View>
+          <ActivityIndicator size="large" color="#3A63ED" animating={isLoading} hidesWhenStopped={false} />
         </View>
         <Text style={styles.loadingText}>
             {isLoading ? t("splash.loading") : ""}

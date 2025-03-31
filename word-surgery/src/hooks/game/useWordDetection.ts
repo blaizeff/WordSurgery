@@ -3,7 +3,7 @@ import { Word } from "../../classes/Word";
 import { ILetter } from "../../interfaces/ILetter";
 import { throttle } from 'lodash';
 import { DetectedWord } from "../../components/game/interfaces";
-import { DEBUG, MIN_WORD_LENGTH, isRegionCovered } from "../../utils/gameUtils";
+import { DEBUG, MIN_WORD_DETECT_LENGTH } from "../../utils/gameUtils";
 
 export interface UseWordDetectionReturn {
   detectedWords: DetectedWord[];
@@ -27,8 +27,6 @@ export function useWordDetection(
 ): UseWordDetectionReturn {
   // State
   const [detectedWords, setDetectedWords] = useState<DetectedWord[]>([]);
-  
-  // Ref to track word changes
   const currentWordStringRef = useRef<string>('');
   
   // Helper function to check if segment contains added letters
@@ -44,11 +42,11 @@ export function useWordDetection(
   // Memoization cache for detectWord function
   const memoCache = new Map<string, DetectedWord[]>();
   
+  // Recursive function to detect words in the current word using divide and conquer approach
+  // Memoization is used for better performance
   const detectWord = (wordString: string, startIndex: number, endIndex: number): DetectedWord[] => {
-    // Create a unique key for this substring
     const cacheKey = `${startIndex}-${endIndex}`;
     
-    // Check if we've already computed this substring
     if (memoCache.has(cacheKey)) {
       return memoCache.get(cacheKey) || [];
     }   
@@ -68,24 +66,19 @@ export function useWordDetection(
         console.log(`Found word: "${currentSubstring}" at ${startIndex}-${endIndex}`);
       }
       
-      // Store in cache and return - found a valid word
       memoCache.set(cacheKey, result);
       return result;
     }
     
     // Base case: word is too short
-    if (endIndex - startIndex + 1 <= MIN_WORD_LENGTH) {
+    if (endIndex - startIndex + 1 <= MIN_WORD_DETECT_LENGTH) {
       memoCache.set(cacheKey, []);
       return [];
     }
     
-    // 3. Left part: substring(0, length-1)
     let left: DetectedWord[] = detectWord(wordString, startIndex, endIndex - 1);
-    
-    // 4. Right part: substring(1, length)
     let right: DetectedWord[] = detectWord(wordString, startIndex + 1, endIndex);
     
-    // Combine results, store in cache and return
     const combinedResults = [...left, ...right];
     memoCache.set(cacheKey, combinedResults);
     return combinedResults;
@@ -96,13 +89,13 @@ export function useWordDetection(
     const letters = currentWord.getLetters();
     if (letters.length === 0) return;
     
-    // If there are not enough letters to form a valid word, clear detected words and return
-    if (letters.length < MIN_WORD_LENGTH) {
+    // Not enough letters for valid word
+    if (letters.length < MIN_WORD_DETECT_LENGTH) {
       setDetectedWords([]);
       return;
     }
     
-    // Check if there are any added letters at all - if not, no need to detect
+    // If no added letters, not valid word
     let hasAnyAddedLetters = false;
     for (const letter of letters) {
       if (letter.initialPosition === undefined) {
@@ -123,48 +116,47 @@ export function useWordDetection(
     
     if (DEBUG) {
       memoCache.forEach((value, key) => {
-        console.log('!!!! KEY:',key, 'VALUE:',value);
+        console.log('KEY:',key, 'VALUE:',value);
       });
     }
     
     memoCache.clear();
     
-    // Filter out words that are completely contained within other words
+    // Filter out words that are completely contained within other words (only keep the longest)
     const filteredWords = Array.from(new Set<DetectedWord>(allWordsArray)).filter((word1) => {
-      // Keep this word if no other word completely contains it
       return !allWordsArray.some((word2) => 
-        // Only compare with different words
         word1 !== word2 && 
-        // Check if word1 is completely contained within word2
         word1.startIndex >= word2.startIndex && 
         word1.endIndex <= word2.endIndex
       );
     });
     
     if (DEBUG) {
-      console.log(`Found ${allWordsArray.length} words in total, filtered to ${filteredWords.length}`);
+      console.log(`Found ${allWordsArray.length} words, filtered to ${filteredWords.length}`);
     }
     
     setDetectedWords(filteredWords);
   }, [currentWord, dictionary]);
   
-  // Stable version of detectWords that doesn't change on every render
   const stableDetectWords = useCallback(() => {
     detectWords();
   }, [detectWords]);
   
-  // Throttled version of the detectWords function
   const throttledDetectWords = useCallback(
     throttle(() => {
       detectWords();
-    }, 300),  // Only run at most once every 300ms
+    }, 300),  // Only run max every 300ms
     [detectWords]
   );
 
-  // Simple function to remove a detected word
   const handleRemoveWord = useCallback((wordToRemove: DetectedWord) => {
     const letters = currentWord.getLetters();
     const addedLetterIndices: number[] = [];
+    
+    // Remove the letters in the current word
+    const newCurrentWordLetters = currentWord.getLetters().filter((letter, index) => {
+      return index < wordToRemove.startIndex || index > wordToRemove.endIndex;
+    });
     
     // Find which letters in the word range were added (for marking as completed)
     for (let i = wordToRemove.startIndex; i <= wordToRemove.endIndex; i++) {
@@ -174,13 +166,7 @@ export function useWordDetection(
       }
     }
     
-    // 1. First, create the new current word by excluding the letters in the detected word
-    const initialLetters = currentWord.getLetters().filter((letter, index) => {
-      // Keep this letter if it's not part of the detected word range
-      return index < wordToRemove.startIndex || index > wordToRemove.endIndex;
-    });
-    
-    // 2. Mark the letters used in the word as completed in available word
+    // Mark the letters used in the word as completed in available word
     const updatedAvailableLetters = availableWord.getLetters().map((letter) => {
       if (letter.originalIndex !== undefined && addedLetterIndices.includes(letter.originalIndex)) {
         return {
@@ -192,24 +178,21 @@ export function useWordDetection(
       return letter;
     });
     
-    // 3. Reset all tracking data
-    const newPlacedLetterIndices = lastPlacedLetterIndices.filter(
-      idx => !addedLetterIndices.includes(idx)
-    );
+    // Reset all tracking data
+    const newPlacedLetterIndices = lastPlacedLetterIndices.filter(x => !addedLetterIndices.includes(x));
     
     const newPlacedLetterPositions = new Map(placedLetterPositions);
-    addedLetterIndices.forEach(idx => {
-      newPlacedLetterPositions.delete(idx);
+    addedLetterIndices.forEach(x => {
+      newPlacedLetterPositions.delete(x);
     });
     
-    // 4. Make all state updates at once
+    // State updates
+
     setDetectedWords([]);
-    
-    // Clear the memoCache to prevent redetection of removed words
     memoCache.clear();
     
     const newCurrentWord = new Word('');
-    newCurrentWord.letters = initialLetters;
+    newCurrentWord.letters = newCurrentWordLetters;
     setCurrentWord(newCurrentWord);
     
     const newAvailableWord = new Word('');
@@ -221,35 +204,24 @@ export function useWordDetection(
 
   }, [currentWord, availableWord, lastPlacedLetterIndices, placedLetterPositions, dictionary, setCurrentWord, setAvailableWord, setLastPlacedLetterIndices, setPlacedLetterPositions, detectWords]);
 
-  // Check for valid words after each letter placement
+  // Check for valid words after each letter placement (throttled)
   useEffect(() => {
     if (lastPlacedLetterIndices.length === 0 && currentWord.getLetters().length === 0) {
       return;
     }
-    
-    // Use throttled version instead of direct call
     throttledDetectWords();
-
   }, [lastPlacedLetterIndices, throttledDetectWords, currentWord]);
   
-  // Immediate detection of words when current word changes due to letter removal
+  // Check for valid words after word removal (immediate)
   useEffect(() => {
-    // Skip initial render
-    if (currentWord.getLetters().length === 0) {
-      return;
-    }
+    // Skip initial
+    if (currentWord.getLetters().length === 0) return;
     
-    // Check current word against the ref to prevent unnecessary updates
+    // Check current word VS ref to prevent unnecessary updates
     const wordString = currentWord.getLetters().map(l => l.value).join('');
-    
-    if (currentWordStringRef.current === wordString) {
-      return;
-    }
-    
+    if (currentWordStringRef.current === wordString) return;
     currentWordStringRef.current = wordString;
     
-    // Detect words without throttling when a letter is removed
-    // This ensures highlights update immediately
     stableDetectWords();
   }, [currentWord, stableDetectWords]);
 

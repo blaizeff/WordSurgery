@@ -1,43 +1,71 @@
-// Minimum word length to be considered valid
-export const MIN_WORD_LENGTH = 3;
+import { Word } from "src/classes/Word";
 
-// Divider width when active
+// Min/max word length constraints for word generation
+export const MIN_WORD_GEN_LENGTH = 5;
+export const MAX_WORD_GEN_LENGTH = 8;
+
+// Min/max word length constraints for word detection
+export const MIN_WORD_DETECT_LENGTH = 3;
+
+// Divider widths
 export const DIVIDER_ACTIVE_WIDTH = 6;
-// Divider width when inactive
 export const DIVIDER_INACTIVE_WIDTH = 2;
+
 // Divider height 
 export const DIVIDER_HEIGHT = 60;
 
 // For debug purposes
 export const DEBUG = true;
 
-// Helper function to check if a region is already covered by a longer word
-export const isRegionCovered = (
-  start: number,
-  end: number,
-  regions: { start: number, end: number }[]
-): boolean => {
-  // A region is only considered "covered" if it is COMPLETELY CONTAINED within another region
-  // This means the entire word must be inside another word, not just overlapping
-  for (const region of regions) {
-    // For a region to be considered "contained":
-    // 1. It must start at or after another region's start
-    // 2. It must end at or before another region's end
-    // 3. It must NOT be exactly the same as the other region
-    const isContained = start >= region.start && end <= region.end;
-    const isExactMatch = start === region.start && end === region.end;
+// Helper function to get 2 random words from the dictionary with acceptable length
+export const generateRandomWords = (dictArray: string[]): { currentWord: Word, availableWord: Word } => {
+  const maxAttempts = 1000;
 
-    if (isContained && !isExactMatch) {
-      if (DEBUG) {
-        console.log(`Region ${start}-${end} is covered by ${region.start}-${region.end}`);
+  const firstIndex = Math.floor(Math.random() * (dictArray.length - maxAttempts));
+  const secondIndex = Math.floor(Math.random() * (dictArray.length - maxAttempts));
+
+  for (let i = firstIndex; i < firstIndex + maxAttempts; i++) {
+    const word1 = dictArray[i];
+    if (word1.length < MIN_WORD_GEN_LENGTH || word1.length > MAX_WORD_GEN_LENGTH) {
+      continue;
+    }
+    for (let j = secondIndex; j < secondIndex + maxAttempts; j++) {
+      const word2 = dictArray[j];
+      if (word2.length < MIN_WORD_GEN_LENGTH || word2.length > MAX_WORD_GEN_LENGTH) {
+        continue;
       }
-      return true;
+    
+      const currentWordObj = new Word(word1);
+      const availableWordObj = new Word(word2);
+      
+      currentWordObj.letters = currentWordObj.letters.map((letter, index) => ({
+        ...letter,
+        initialPosition: index
+      }));
+      
+      availableWordObj.letters = availableWordObj.letters.map((letter, index) => ({
+        ...letter,
+        originalIndex: index
+      }));
+      
+      return { currentWord: currentWordObj, availableWord: availableWordObj };
     }
   }
   
-  if (DEBUG && regions.length > 0) {
-    console.log(`Region ${start}-${end} is NOT covered by any existing region`);
-  }
+  const fallbackCurrent = new Word('voiture');
+  fallbackCurrent.letters = fallbackCurrent.letters.map((letter, index) => ({
+    ...letter,
+    initialPosition: index
+  }));
   
-  return false;
-}; 
+  const fallbackAvailable = new Word('verrat');
+  fallbackAvailable.letters = fallbackAvailable.letters.map((letter, index) => ({
+    ...letter,
+    originalIndex: index
+  }));
+  
+  return { 
+    currentWord: fallbackCurrent, 
+    availableWord: fallbackAvailable
+  };
+};

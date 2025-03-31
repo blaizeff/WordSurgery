@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useState, useRef, useEffect } from 'react';
 import { useLanguage } from './hooks/useLanguage';
 import Splash from './components/Splash';
+import React from 'react';
 
 export default function App() {
   const [showMenu, setShowMenu] = useState(true);
@@ -23,7 +24,7 @@ export default function App() {
     setShowMenu(true);
   };
 
-  // Handle splash screen fade out when app is ready
+  // splash screen fade out when app is ready
   useEffect(() => {
     if (appReady) {
       Animated.timing(fadeAnim, {
@@ -38,7 +39,6 @@ export default function App() {
     }
   }, [appReady, fadeAnim]);
 
-  // Prepare the main app content
   const mainContent = (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

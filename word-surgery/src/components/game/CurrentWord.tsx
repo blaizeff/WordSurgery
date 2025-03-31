@@ -1,6 +1,5 @@
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
-import { throttle } from 'lodash';
 import { CurrentWordProps } from "./interfaces";
 import { gameStyles } from "./styles";
 import LetterDivider from "./LetterDivider";
@@ -33,18 +32,16 @@ const CurrentWord: React.FC<CurrentWordProps> = ({
       
       {currentWord.getLetters().map((letter, index) => (
         <React.Fragment key={`letter-${index}`}>
-          {/* Added TouchableOpacity for tap handling */}
           <TouchableOpacity 
             style={[
               gameStyles.letterBox,
               letter.initialPosition !== undefined && gameStyles.initialLetterBox,
-              // Add green underline for letters that are part of detected words
+              // Green underline for detected words
               detectedWords.some(word => 
                 index >= word.startIndex && index <= word.endIndex
               ) && gameStyles.detectedWordLetter
             ]}
             onPress={() => handleLetterTap(letter, index)}
-            // Disable for initial letters
             disabled={letter.initialPosition !== undefined}
           >
             <Text 
@@ -57,7 +54,7 @@ const CurrentWord: React.FC<CurrentWordProps> = ({
             </Text>
           </TouchableOpacity>
 
-          {/* Divider after each letter - only shown when dragging and valid */}
+          {/* Only divider shown when dragging and valid */}
           {isDragging && isDividerValid(index + 1) && (
             <LetterDivider 
               index={index + 1}

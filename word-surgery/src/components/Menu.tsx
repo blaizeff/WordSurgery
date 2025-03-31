@@ -7,10 +7,7 @@ import {
   TextInput, 
   Modal, 
   Alert, 
-  Image,
-  ScrollView,
   ActivityIndicator,
-  Animated
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Language } from '../hooks/useLanguage';
@@ -36,22 +33,16 @@ const Menu: React.FC<MenuProps> = ({
   const [isAddingCustom, setIsAddingCustom] = useState(false);
   const [localLoading, setLocalLoading] = useState(false);
   const { t } = useTranslation(currentLanguage);
-  
-  // Declare isCurrentlyLoading state early so it can be used in the useEffect hook
+    
   const isCurrentlyLoading = isLoading || localLoading || isAddingCustom;
   
   const handleSelectLanguage = (language: Language) => {
-    // If we're already in a loading state, do nothing
     if (isCurrentlyLoading) return;
     
-    // Start loading immediately
     setLocalLoading(true);
     
-    // Call the language change handler
     onSelectLanguage(language);
     
-    // Keep local loading state active until the actual loading state is updated
-    // This ensures UI feedback for the duration of the loading process
     const checkLoadingInterval = setInterval(() => {
       if (!isLoading) {
         setLocalLoading(false);
@@ -59,10 +50,9 @@ const Menu: React.FC<MenuProps> = ({
       }
     }, 200);
     
-    // Ensure cleanup if component unmounts during loading
     setTimeout(() => {
       clearInterval(checkLoadingInterval);
-    }, 10000); // Safety timeout (10 seconds)
+    }, 10000);
   };
 
   const handleAddCustomDictionary = async () => {

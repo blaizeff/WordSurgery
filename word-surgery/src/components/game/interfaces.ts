@@ -74,3 +74,14 @@ export interface DetectedWordsListProps {
   detectedWords: DetectedWord[];
   handleRemoveWord: (word: DetectedWord) => void;
 } 
+
+
+export interface GameState {
+  currentWord: Word;
+  availableWord: Word;
+  lastPlacedLetterIndices: number[];
+  placedLetterPositions: Map<number, number>;
+  detectedWords: DetectedWord[];
+}
+
+export type GameStateAction = 'tapletter' | 'dragstart' | 'dragend' | 'removeword';

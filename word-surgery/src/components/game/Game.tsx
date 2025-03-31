@@ -2,35 +2,18 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import { View, Text, TouchableOpacity, Modal, Dimensions, Animated } from "react-native";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import LottieView from 'lottie-react-native';
-import { Word } from "../../classes/Word";
-import { ILetter } from "../../interfaces/ILetter";
 import { gameStyles } from "./styles";
-import { GameProps, DetectedWord } from "./interfaces";
+import { GameProps } from "./interfaces";
 import CurrentWord from "./CurrentWord";
 import AvailableLetters from "./AvailableLetters";
 import DetectedWordsList from "./DetectedWordsList";
 import { useDragDrop } from "../../hooks/game/useDragDrop";
 import { useWordDetection } from "../../hooks/game/useWordDetection";
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { DEBUG, generateRandomWords } from "src/utils/gameUtils";
+import { useUndo } from "src/hooks/game/useUndo";
 
-// Store the game state for undo functionality
-interface GameState {
-  currentWord: Word;
-  availableWord: Word;
-  lastPlacedLetterIndices: number[];
-  placedLetterPositions: Map<number, number>;
-  detectedWords: DetectedWord[];
-}
-
-// Debug mode for testing
-const DEBUG_MODE = false;
-
-// Game duration in seconds (2 minutes)
-const GAME_DURATION = DEBUG_MODE ? 15 : 120; // 2 minutes or 15 seconds in debug mode
-
-// Min/max word length constraints
-const MIN_WORD_LENGTH = 5;
-const MAX_WORD_LENGTH = 8;
+const GAME_DURATION = 120;
 
 export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps) {
   // Create refs and states
@@ -40,81 +23,17 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
   const [timeRemaining, setTimeRemaining] = useState<number>(GAME_DURATION);
   const [gameActive, setGameActive] = useState<boolean>(true);
   const [timeUp, setTimeUp] = useState<boolean>(false);
-  const [undoStack, setUndoStack] = useState<GameState[]>([]);
   
-  // Word generation functions
-  const generateRandomWords = useCallback(() => {
-    console.log('Generating random words');
-    // Pick two random words that meet the length criteria
-    const maxAttempts = 1000;
-
-    const firstIndex = Math.floor(Math.random() * (dictArray.length - maxAttempts));
-    const secondIndex = Math.floor(Math.random() * (dictArray.length - maxAttempts));
-
-    for (let i = firstIndex; i < firstIndex + maxAttempts; i++) {
-      // Randomly sample words from dictionary
-      const word1 = dictArray[i];
-      if (word1.length < MIN_WORD_LENGTH || word1.length > MAX_WORD_LENGTH) {
-        console.log('Invalid word length:', word1);
-        continue;
-      }
-      for (let j = secondIndex; j < secondIndex + maxAttempts; j++) {
-        const word2 = dictArray[j];
-        if (word2.length < MIN_WORD_LENGTH || word2.length > MAX_WORD_LENGTH) {
-          console.log('Invalid word length:', word2);
-          continue;
-        }
-      
-        // Create Word objects
-        const currentWordObj = new Word(word1);
-        const availableWordObj = new Word(word2);
-        
-        console.log('Selected random word pair:', word1, word2);
-        
-        // Add initial position to current word's letters
-        currentWordObj.letters = currentWordObj.letters.map((letter, index) => ({
-          ...letter,
-          initialPosition: index
-        }));
-        
-        // Add original index to available word's letters
-        availableWordObj.letters = availableWordObj.letters.map((letter, index) => ({
-          ...letter,
-          originalIndex: index
-        }));
-        
-        return { currentWord: currentWordObj, availableWord: availableWordObj };
-      }
-    }
-    
-    // Fallback if randomization doesn't work for some reason
-    console.warn('Using fallback words');
-    const fallbackCurrent = new Word('voiture');
-    fallbackCurrent.letters = fallbackCurrent.letters.map((letter, index) => ({
-      ...letter,
-      initialPosition: index
-    }));
-    
-    const fallbackAvailable = new Word('verrat');
-    fallbackAvailable.letters = fallbackAvailable.letters.map((letter, index) => ({
-      ...letter,
-      originalIndex: index
-    }));
-    
-    return { 
-      currentWord: fallbackCurrent, 
-      availableWord: fallbackAvailable
-    };
+  const getNewWords = useCallback(() => {
+    return generateRandomWords(dictArray);
   }, [dictArray]);
   
-  // Generate initial words
-  const [initialWords] = useState(() => generateRandomWords());
+  const [initialWords] = useState(() => getNewWords());
   
-  // Initialize words
   const initialCurrentWord = initialWords.currentWord;
   const initialAvailableWord = initialWords.availableWord;
   
-  // Use custom hooks
+  // Hooks
   const {
     currentWord,
     setCurrentWord,
@@ -152,160 +71,43 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
     setPlacedLetterPositions
   );
 
-  // Save current state to undo stack
-  const saveState = useCallback((action: string) => {
-    // Deep copy the state before modifying it
-    const currentState: GameState = {
-      currentWord: new Word(''),
-      availableWord: new Word(''),
-      lastPlacedLetterIndices: [...lastPlacedLetterIndices],
-      placedLetterPositions: new Map(placedLetterPositions),
-      detectedWords: [...detectedWords]
-    };
-    
-    // Deep copy letter arrays
-    currentState.currentWord.letters = JSON.parse(JSON.stringify(currentWord.getLetters()));
-    currentState.availableWord.letters = JSON.parse(JSON.stringify(availableWord.getLetters()));
-    
-    console.log(`Saving state after action: ${action}`);
-    setUndoStack(prev => [...prev, currentState]);
-  }, [currentWord, availableWord, lastPlacedLetterIndices, placedLetterPositions, detectedWords]);
+  const {
+    undoStack,
+    resetUndoState,
+    handleUndo,
+    handleDragStartWithUndo,
+    handleDragEndWithUndo,
+    handleLetterTapWithUndo,
+    handleRemoveWordWithUndo,
+  } = useUndo(
+    initialCurrentWord,
+    initialAvailableWord,
+    lastPlacedLetterIndices,
+    placedLetterPositions,
+    detectedWords,
+    currentWord,
+    availableWord,
+    setCurrentWord,
+    setAvailableWord,
+    setLastPlacedLetterIndices,
+    setPlacedLetterPositions,
+    setDetectedWords,
+    handleLetterTap,
+    handleDragStart,
+    handleDragEnd,
+    handleRemoveWord
+  );
 
-  // Track letter placement in a ref
-  const actionStateRef = useRef({
-    lastSavedWordLength: initialCurrentWord.getLetters().length,
-    lastSavedPlacedLetterIndices: [] as number[],
-    lastSavedDetectedWordsLength: 0,
-    saving: false,
-    dragInProgress: false
-  });
-
-  // Handle undo action
-  const handleUndo = useCallback(() => {
-    if (undoStack.length === 0) return;
-    
-    // Set flag to prevent state saving during restoration
-    actionStateRef.current.saving = true;
-    
-    // Get the previous state
-    const prevState = undoStack[undoStack.length - 1];
-    
-    // Restore the previous state
-    const newCurrentWord = new Word('');
-    newCurrentWord.letters = [...prevState.currentWord.letters];
-    setCurrentWord(newCurrentWord);
-    
-    const newAvailableWord = new Word('');
-    newAvailableWord.letters = [...prevState.availableWord.letters];
-    setAvailableWord(newAvailableWord);
-    
-    setLastPlacedLetterIndices([...prevState.lastPlacedLetterIndices]);
-    setPlacedLetterPositions(new Map(prevState.placedLetterPositions));
-    setDetectedWords([...prevState.detectedWords]);
-    
-    // Update tracking refs
-    actionStateRef.current = {
-      lastSavedWordLength: prevState.currentWord.letters.length,
-      lastSavedPlacedLetterIndices: [...prevState.lastPlacedLetterIndices],
-      lastSavedDetectedWordsLength: prevState.detectedWords.length,
-      saving: false,
-      dragInProgress: false
-    };
-    
-    // Remove the used state from the stack
-    setUndoStack(prev => prev.slice(0, -1));
-    
-    console.log("Undo completed - restored previous state");
-  }, [undoStack, setCurrentWord, setAvailableWord, setLastPlacedLetterIndices, setPlacedLetterPositions, setDetectedWords]);
-
-  // Enhanced letter tap handler to save state before modification
-  const handleLetterTapWithUndo = useCallback((letter: ILetter, index: number) => {
-    // Save state before modifying
-    if (!actionStateRef.current.saving) {
-      saveState("tap letter");
-    }
-    
-    // Call original handler
-    handleLetterTap(letter, index);
-  }, [handleLetterTap, saveState]);
-
-  // Enhanced drag handlers to save state
-  const handleDragStartWithUndo = useCallback((index: number) => {
-    // Save state before starting to drag (before any letter is added)
-    if (!actionStateRef.current.saving && !actionStateRef.current.dragInProgress) {
-      saveState("drag start");
-      actionStateRef.current.dragInProgress = true;
-    }
-    
-    // Call original handler
-    handleDragStart(index);
-  }, [handleDragStart, saveState]);
-  
-  const handleDragEndWithUndo = useCallback(() => {
-    // Call original handler
-    handleDragEnd();
-    
-    // Reset drag flag
-    actionStateRef.current.dragInProgress = false;
-    
-    // Update tracking refs for future operations
-    actionStateRef.current.lastSavedWordLength = currentWord.getLetters().length;
-    actionStateRef.current.lastSavedPlacedLetterIndices = [...lastPlacedLetterIndices];
-    
-  }, [handleDragEnd, currentWord, lastPlacedLetterIndices]);
-
-  // Enhanced word removal handler
-  const handleRemoveWordWithUndo = useCallback((wordToRemove: DetectedWord) => {
-    // Save state before removing word
-    if (!actionStateRef.current.saving) {
-      saveState("remove word");
-    }
-    
-    // Call original handler
-    handleRemoveWord(wordToRemove);
-  }, [handleRemoveWord, saveState]);
-
-  // Save initial state on mount
-  useEffect(() => {
-    // Save initial state references
-    actionStateRef.current = {
-      lastSavedWordLength: initialCurrentWord.getLetters().length,
-      lastSavedPlacedLetterIndices: [],
-      lastSavedDetectedWordsLength: 0,
-      saving: false,
-      dragInProgress: false
-    };
-    
-    // Save the initial game state to enable undoing to the very beginning
-    const initialState: GameState = {
-      currentWord: new Word(''),
-      availableWord: new Word(''),
-      lastPlacedLetterIndices: [],
-      placedLetterPositions: new Map(),
-      detectedWords: []
-    };
-    
-    // Deep copy letter arrays
-    initialState.currentWord.letters = JSON.parse(JSON.stringify(initialCurrentWord.getLetters()));
-    initialState.availableWord.letters = JSON.parse(JSON.stringify(initialAvailableWord.getLetters()));
-    
-    // Set the initial state as the first undo point
-    console.log("Saving initial game state");
-    setUndoStack([initialState]);
-  }, [initialCurrentWord, initialAvailableWord]);
-
-  // Format time as mm:ss
   const formatTime = useCallback((seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   }, []);
   
-  // Get timer color based on remaining time
   const getTimerColor = useCallback((seconds: number) => {
-    if (seconds <= 10) return '#FF5252'; // Red for 10 seconds or less
-    if (seconds <= 30) return '#FFC107'; // Yellow for 30 seconds or less
-    return '#4CAF50'; // Default green
+    if (seconds <= 10) return '#FF5252'; // Red
+    if (seconds <= 30) return '#FFC107'; // Yellow
+    return '#4CAF50'; // Green
   }, []);
 
   // Timer effect
@@ -326,7 +128,7 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
     return () => clearInterval(timer);
   }, [gameActive, gameCompleted]);
 
-  // Game completion effect
+  // Game over effect
   useEffect(() => {
     if (currentWord.size() === 0) {
       setGameCompleted(true);
@@ -337,18 +139,14 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
   // Time's up effect
   useEffect(() => {
     if (timeRemaining === 0 && !gameCompleted) {
-      // Game over due to time running out
       setTimeUp(true);
       setGameActive(false);
     }
   }, [timeRemaining, gameCompleted]);
   
-  // Reset game function
   const resetGame = () => {
-    // Generate new random words
-    const newWords = generateRandomWords();
+    const newWords = getNewWords();
     
-    // Reset all state
     setCurrentWord(() => newWords.currentWord);
     setAvailableWord(() => newWords.availableWord);
     
@@ -359,24 +157,14 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
     setTimeRemaining(GAME_DURATION);
     setGameActive(true);
     setTimeUp(false);
-    
-    // Clear the undo stack
-    setUndoStack([]);
-    
-    // Reset tracking refs
-    actionStateRef.current = {
-      lastSavedWordLength: newWords.currentWord.getLetters().length,
-      lastSavedPlacedLetterIndices: [],
-      lastSavedDetectedWordsLength: 0,
-      saving: false,
-      dragInProgress: false
-    };
+
+    resetUndoState(newWords);
   };
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={gameStyles.container}>
-        {/* Add back button if onBackToMenu prop is provided */}
+        {/* Back button */}
         {onBackToMenu && (
           <TouchableOpacity 
             style={gameStyles.backButton}
@@ -406,7 +194,7 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
           </Text>
         </View>
         
-        {/* Current Word with Dividers */}
+        {/* Current Word */}
         <CurrentWord
           currentWord={currentWord}
           isDragging={isDragging}
@@ -419,7 +207,7 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
           wordContainerRef={wordContainerRef}
         />
 
-        {/* Detected Words List */}
+        {/* Detected Words Alert */}
         <DetectedWordsList 
           detectedWords={detectedWords} 
           handleRemoveWord={handleRemoveWordWithUndo} 
@@ -439,7 +227,7 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
             <Text style={gameStyles.undoButtonText}>Undo</Text>
           </TouchableOpacity>
 
-          {/* Available Letters (Draggable) */}
+          {/* Available Letters */}
           <AvailableLetters
             availableWord={availableWord}
             isLetterEnabled={isLetterEnabled}
@@ -449,7 +237,7 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
           />
         </View>
         
-        {/* Victory Modal with Confetti */}
+        {/* Victory Modal */}
         {gameCompleted && (
           <View style={gameStyles.victoryOverlay}>
             <LottieView
@@ -459,7 +247,7 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
                 position: 'absolute',
                 width: '150%',
                 height: '100%',
-                left: '-25%', // Center the wider animation (150% width means 25% on each side)
+                left: '-25%',
                 top: 0,
               }}
               speed={1.2}
