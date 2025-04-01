@@ -1,5 +1,6 @@
 import { ILetter } from "../../interfaces/ILetter";
 import { Word } from "../../classes/Word";
+import { Language } from "src/hooks/useLanguage";
 
 // Interface for detected words
 export class DetectedWord {
@@ -37,6 +38,7 @@ export interface DividerProps {
 
 // Add interface for Game props
 export interface GameProps {
+  currentLanguage: Language;
   dictionary: Set<string>;
   dictArray: string[];
   onBackToMenu?: () => void;
@@ -71,6 +73,7 @@ export interface LetterDividerProps extends DividerProps {
 
 // Interface for DetectedWordsList component
 export interface DetectedWordsListProps {
+  t: (key: string) => string;
   detectedWords: DetectedWord[];
   handleRemoveWord: (word: DetectedWord) => void;
 } 

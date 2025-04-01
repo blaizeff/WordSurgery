@@ -166,16 +166,12 @@ export function useWordDetection(
       }
     }
     
-    // Mark the letters used in the word as completed in available word
-    const updatedAvailableLetters = availableWord.getLetters().map((letter) => {
+    // Remove the completed letters from available word
+    const updatedAvailableLetters = availableWord.getLetters().filter((letter) => {
       if (letter.originalIndex !== undefined && addedLetterIndices.includes(letter.originalIndex)) {
-        return {
-          ...letter,
-          isAvailable: false,
-          isCompleted: true
-        };
+        return false; // Remove this letter
       }
-      return letter;
+      return true;
     });
     
     // Reset all tracking data
@@ -187,7 +183,6 @@ export function useWordDetection(
     });
     
     // State updates
-
     setDetectedWords([]);
     memoCache.clear();
     

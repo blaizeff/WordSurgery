@@ -2,8 +2,9 @@ import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { DetectedWordsListProps } from "./interfaces";
 import { gameStyles } from "./styles";
-
+import { Ionicons } from "@expo/vector-icons";
 const DetectedWordsList: React.FC<DetectedWordsListProps> = ({ 
+  t,
   detectedWords, 
   handleRemoveWord 
 }) => {
@@ -23,7 +24,7 @@ const DetectedWordsList: React.FC<DetectedWordsListProps> = ({
               setTimeout(() => handleRemoveWord(word), 50);
             }}
           >
-            <Text style={gameStyles.removeButtonText}>Remove</Text>
+            <Ionicons name="cut" size={28} color="white" />
           </TouchableOpacity>
         </View>
       ))}

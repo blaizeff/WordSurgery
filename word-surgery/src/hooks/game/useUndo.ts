@@ -68,8 +68,8 @@ export function useUndo(
       detectedWords: [...detectedWords]
     };
     
-    currentState.currentWord.letters = JSON.parse(JSON.stringify(currentWord.getLetters()));
-    currentState.availableWord.letters = JSON.parse(JSON.stringify(availableWord.getLetters()));
+    currentState.currentWord.letters = currentWord.getLetters().map(letter => ({...letter}));
+    currentState.availableWord.letters = availableWord.getLetters().map(letter => ({...letter}));
     
     if (DEBUG) console.log(`Saving state after action: ${action}`);
     
@@ -80,7 +80,7 @@ export function useUndo(
     }
   }, [currentWord, availableWord, lastPlacedLetterIndices, placedLetterPositions, detectedWords]);
 
-  const applyGameState = (state: GameState) => {
+  const applyGameState = useCallback((state: GameState) => {
     const newCurrentWord = new Word('');
     newCurrentWord.letters = [...state.currentWord.letters];
     setCurrentWord(newCurrentWord);
@@ -100,7 +100,7 @@ export function useUndo(
       saving: false,
       dragInProgress: false
     };
-  };
+  }, [setCurrentWord, setAvailableWord, setLastPlacedLetterIndices, setPlacedLetterPositions, setDetectedWords]);
 
   const handleUndo = useCallback(() => {
     if (undoStack.length === 0) return;
@@ -125,7 +125,9 @@ export function useUndo(
 
   const handleDragStartWithUndo = useCallback((index: number) => {
     if (!actionStateRef.current.saving && !actionStateRef.current.dragInProgress) {
-      saveState("dragstart");
+      requestAnimationFrame(() => {
+        saveState("dragstart");
+      });
       actionStateRef.current.dragInProgress = true;
     }
     

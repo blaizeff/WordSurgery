@@ -1,18 +1,22 @@
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export type Language = 'en' | 'fr' | 'custom';
+export type Language = 'en' | 'fr';
+export type DictionarySource = 'default' | 'custom';
 
 const LANGUAGE_STORAGE_KEY = '@WordSurgery:language';
+const DICTIONARY_SOURCE_STORAGE_KEY = '@WordSurgery:dictionarySource';
 const CUSTOM_URL_STORAGE_KEY = '@WordSurgery:customDictionaryUrl';
 
 export interface LanguageState {
   currentLanguage: Language;
+  dictionarySource: DictionarySource;
   words: Set<string>;
   wordsArray: string[];
   isLoading: boolean;
   setLanguage: (lang: Language) => void;
   addCustomDictionary: (url: string) => Promise<void>;
+  removeCustomDictionary: () => Promise<void>;
 }
 
 let englishDictionary: Array<string> | null = null;
@@ -20,6 +24,7 @@ let frenchDictionary: Array<string> | null = null;
 
 const loadDictionaryAsync = (
   language: Language, 
+  source: DictionarySource,
   customUrl: string | null,
   callback: (words: Array<string>) => void,
   errorCallback: (error: Error) => void
@@ -28,27 +33,29 @@ const loadDictionaryAsync = (
     try {
       let allWords: Array<string> = [];
 
-      if (language === 'en') {
-        if (!englishDictionary) {
-          englishDictionary = await new Promise<Array<string>>((resolve) => {
-            setTimeout(() => {
-              const words = require('an-array-of-english-words');
-              resolve(words);
-            }, 0);
-          });
+      if (source === 'default') {
+        if (language === 'en') {
+          if (!englishDictionary) {
+            englishDictionary = await new Promise<Array<string>>((resolve) => {
+              setTimeout(() => {
+                const words = require('an-array-of-english-words');
+                resolve(words);
+              }, 0);
+            });
+          }
+          allWords = englishDictionary;
+        } else if (language === 'fr') {
+          if (!frenchDictionary) {
+            frenchDictionary = await new Promise<Array<string>>((resolve) => {
+              setTimeout(() => {
+                const words = require('an-array-of-french-words');
+                resolve(words);
+              }, 0);
+            });
+          }
+          allWords = frenchDictionary;
         }
-        allWords = englishDictionary;
-      } else if (language === 'fr') {
-        if (!frenchDictionary) {
-          frenchDictionary = await new Promise<Array<string>>((resolve) => {
-            setTimeout(() => {
-              const words = require('an-array-of-french-words');
-              resolve(words);
-            }, 0);
-          });
-        }
-        allWords = frenchDictionary;
-      } else if (language === 'custom' && customUrl) {
+      } else if (source === 'custom' && customUrl) {
         const response = await fetch(customUrl);
         
         if (!response.ok) {
@@ -75,53 +82,60 @@ const loadDictionaryAsync = (
   loadDictionary();
 };
 
-const saveLanguagePreference = async (language: Language, customUrl: string | null) => {
+const savePreferences = async (language: Language, source: DictionarySource, customUrl: string | null) => {
   try {
     await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+    await AsyncStorage.setItem(DICTIONARY_SOURCE_STORAGE_KEY, source);
     
-    if (language === 'custom' && customUrl) {
+    if (source === 'custom' && customUrl) {
       await AsyncStorage.setItem(CUSTOM_URL_STORAGE_KEY, customUrl);
     }
     
-    console.log('Language preference saved:', language);
+    console.log('Preferences saved:', { language, source });
   } catch (error) {
-    console.error('Error saving language preference:', error);
+    console.error('Error saving preferences:', error);
   }
 };
 
-const loadLanguagePreference = async (): Promise<{ language: Language; customUrl: string | null }> => {
+const loadPreferences = async (): Promise<{ 
+  language: Language; 
+  source: DictionarySource;
+  customUrl: string | null 
+}> => {
   try {
     const savedLanguage = await AsyncStorage.getItem(LANGUAGE_STORAGE_KEY);
+    const savedSource = await AsyncStorage.getItem(DICTIONARY_SOURCE_STORAGE_KEY);
     const savedCustomUrl = await AsyncStorage.getItem(CUSTOM_URL_STORAGE_KEY);
     
     return { 
       language: (savedLanguage as Language) || 'en',
+      source: (savedSource as DictionarySource) || 'default',
       customUrl: savedCustomUrl
     };
   } catch (error) {
-    console.error('Error loading language preference:', error);
-    return { language: 'en', customUrl: null };
+    console.error('Error loading preferences:', error);
+    return { language: 'en', source: 'default', customUrl: null };
   }
 };
 
 export const useLanguage = (): LanguageState => {
   const [currentLanguage, setCurrentLanguage] = useState<Language>('en');
+  const [dictionarySource, setDictionarySource] = useState<DictionarySource>('default');
   const [words, setWords] = useState<Set<string>>(new Set());
   const [wordsArray, setWordsArray] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [customDictionaryUrl, setCustomDictionaryUrl] = useState<string | null>(null);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
-  // Load saved language preference on initial mount
+  // Load saved preferences on initial mount
   useEffect(() => {
     const loadSavedPreference = async () => {
-      const { language, customUrl } = await loadLanguagePreference();
+      const { language, source, customUrl } = await loadPreferences();
       
-      if (language) {
-        setCurrentLanguage(language);
-        if (language === 'custom' && customUrl) {
-          setCustomDictionaryUrl(customUrl);
-        }
+      setCurrentLanguage(language);
+      setDictionarySource(source);
+      if (source === 'custom' && customUrl) {
+        setCustomDictionaryUrl(customUrl);
       }
       
       setInitialLoadComplete(true);
@@ -130,7 +144,7 @@ export const useLanguage = (): LanguageState => {
     loadSavedPreference();
   }, []);
 
-  // Load dictionary when language changes
+  // Load dictionary when language or source changes
   useEffect(() => {
     if (!initialLoadComplete) return;
     
@@ -139,6 +153,7 @@ export const useLanguage = (): LanguageState => {
     
     loadDictionaryAsync(
       currentLanguage,
+      dictionarySource,
       customDictionaryUrl,
       (loadedWords) => {
         if (isMounted) {
@@ -150,8 +165,8 @@ export const useLanguage = (): LanguageState => {
       (error) => {
         console.error('Dictionary loading error:', error);
         if (isMounted) {
-          if (currentLanguage !== 'en') {
-            setCurrentLanguage('en');
+          if (dictionarySource === 'custom') {
+            setDictionarySource('default');
           } else {
             setIsLoading(false);
           }
@@ -159,12 +174,12 @@ export const useLanguage = (): LanguageState => {
       }
     );
     
-    saveLanguagePreference(currentLanguage, customDictionaryUrl);
+    savePreferences(currentLanguage, dictionarySource, customDictionaryUrl);
     
     return () => {
       isMounted = false;
     };
-  }, [currentLanguage, customDictionaryUrl, initialLoadComplete]);
+  }, [currentLanguage, dictionarySource, customDictionaryUrl, initialLoadComplete]);
 
   const setLanguage = (lang: Language) => {
     setCurrentLanguage(lang);
@@ -172,8 +187,21 @@ export const useLanguage = (): LanguageState => {
 
   const addCustomDictionary = async (url: string) => {
     setCustomDictionaryUrl(url);
-    setCurrentLanguage('custom');
+    setDictionarySource('custom');
   };
 
-  return { currentLanguage, words, wordsArray, isLoading, setLanguage, addCustomDictionary };
+  const removeCustomDictionary = async () => {
+    setDictionarySource('default');
+  };
+
+  return { 
+    currentLanguage, 
+    dictionarySource, 
+    words, 
+    wordsArray, 
+    isLoading, 
+    setLanguage, 
+    addCustomDictionary, 
+    removeCustomDictionary 
+  };
 };

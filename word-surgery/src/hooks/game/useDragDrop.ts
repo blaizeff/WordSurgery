@@ -55,13 +55,34 @@ export function useDragDrop(initialWord: Word, initialAvailableWord: Word): UseD
     // If no letter placed yet, ALL letters enabled
     if (lastPlacedLetterIndices.length === 0) return true;
     
-    // Check if letter is adjacent to previously placed letter
+    // Check if letter is adjacent to any previously placed letter
     for (const placedIndex of lastPlacedLetterIndices) {
+      // Check directly adjacent indices
       if (Math.abs(originalIndex - placedIndex) === 1) return true;
+      
+      // Check for adjacent with removed letters in between
+      const min = Math.min(originalIndex, placedIndex);
+      const max = Math.max(originalIndex, placedIndex);
+      
+      // Check if all indices between min and max are missing from available letters
+      let allIndicesBetweenAreMissing = true;
+      for (let i = min + 1; i < max; i++) {
+        // Check if this index exists in the available word
+        const letterExists = availableWord.getLetters().some(letter => 
+          letter.originalIndex === i
+        );
+        
+        if (letterExists) {
+          allIndicesBetweenAreMissing = false;
+          break;
+        }
+      }
+      
+      if (allIndicesBetweenAreMissing) return true;
     }
     
     return false;
-  }, [lastPlacedLetterIndices]);
+  }, [lastPlacedLetterIndices, availableWord]);
   
   // To show where a letter can be placed in current word while dragging
   const isDividerValid = useCallback((dividerIndex: number) => {
@@ -80,7 +101,32 @@ export function useDragDrop(initialWord: Word, initialAvailableWord: Word): UseD
     let adjacentPlacedPosition: number | null = null;
     
     for (const placedIndex of lastPlacedLetterIndices) {
+      // Check direct adjacency
       if (Math.abs(draggedOriginalIndex - placedIndex) === 1) {
+        adjacentPlacedIndex = placedIndex;
+        adjacentPlacedPosition = placedLetterPositions.get(placedIndex) ?? -1;
+        if (adjacentPlacedPosition !== -1) break; // Adjacent letter found
+      }
+      
+      // Check adjacency with removed letters in between
+      const min = Math.min(draggedOriginalIndex, placedIndex);
+      const max = Math.max(draggedOriginalIndex, placedIndex);
+      
+      // Check if all indices between min and max are missing from available letters
+      let allIndicesBetweenAreMissing = true;
+      for (let i = min + 1; i < max; i++) {
+        // Check if this index exists in the available word
+        const letterExists = availableWord.getLetters().some(letter => 
+          letter.originalIndex === i
+        );
+        
+        if (letterExists) {
+          allIndicesBetweenAreMissing = false;
+          break;
+        }
+      }
+      
+      if (allIndicesBetweenAreMissing) {
         adjacentPlacedIndex = placedIndex;
         adjacentPlacedPosition = placedLetterPositions.get(placedIndex) ?? -1;
         if (adjacentPlacedPosition !== -1) break; // Adjacent letter found
@@ -205,12 +251,14 @@ export function useDragDrop(initialWord: Word, initialAvailableWord: Word): UseD
         // Update the positions map
         setPlacedLetterPositions(prev => {
           const newMap = new Map(prev);
-          newMap.delete(tappedLetter.originalIndex!);
+          if (tappedLetter.originalIndex !== undefined) {
+            newMap.delete(tappedLetter.originalIndex);
+          }
           
           // Adjust positions for existing letters that come after the removal point
-          newMap.forEach((position, index) => {
+          newMap.forEach((position, originalIdx) => {
             if (position > index) {
-              newMap.set(index, position - 1);
+              newMap.set(originalIdx, position - 1);
             }
           });
           
@@ -223,23 +271,36 @@ export function useDragDrop(initialWord: Word, initialAvailableWord: Word): UseD
         const newWord = new Word('');
         const letters = [...prev.getLetters()];
         
-        // Find the letter with matching originalIndex that's not available
-        const availableIndex = letters.findIndex(
-          letter => letter.originalIndex === tappedLetter.originalIndex && !letter.isAvailable
-        );
+        // Create the letter to add back to available word
+        const letterToAdd: ILetter = {
+          value: tappedLetter.value,
+          isAvailable: true,
+          initialPosition: undefined,
+          originalIndex: tappedLetter.originalIndex
+        };
         
-        if (availableIndex !== -1) {
-          letters[availableIndex] = {
-            ...letters[availableIndex],
-            isAvailable: true
-          };
+        // Find the correct position to insert based on original index
+        if (tappedLetter.originalIndex !== undefined) {
+          // Find where this letter should be placed based on originalIndex
+          let insertIndex = letters.length;
+          for (let i = 0; i < letters.length; i++) {
+            if (letters[i].originalIndex !== undefined && 
+                letters[i].originalIndex! === tappedLetter.originalIndex) {
+              insertIndex = i;
+              break;
+            }
+          }
+          letters.splice(insertIndex, 1, letterToAdd);
+        } else {
+          // If no original index, add to the end
+          letters.push(letterToAdd);
         }
         
         newWord.letters = letters;
         return newWord;
       });
     }
-  }, [currentWord]);
+  }, [currentWord, setCurrentWord, setAvailableWord, setLastPlacedLetterIndices, setPlacedLetterPositions]);
 
   const handleDividerLayout = useCallback(
     memoize(

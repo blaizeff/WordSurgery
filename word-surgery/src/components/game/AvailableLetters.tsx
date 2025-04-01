@@ -20,14 +20,12 @@ const AvailableLetters: React.FC<AvailableLettersProps> = ({
               key={`available-${index}`} 
               style={[
                 gameStyles.availableLetterBox, 
-                gameStyles.disabledLetterBox,
-                letter.isCompleted && gameStyles.completedLetterBox
+                gameStyles.disabledLetterBox
               ]}
             >
               <Text style={[
                 gameStyles.letterText,
-                gameStyles.disabledLetterText,
-                letter.isCompleted && gameStyles.completedLetterText
+                gameStyles.disabledLetterText
               ]}>
                 {letter.value}
               </Text>

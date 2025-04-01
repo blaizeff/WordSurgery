@@ -15,21 +15,19 @@ export const DIVIDER_INACTIVE_WIDTH = 2;
 export const DIVIDER_HEIGHT = 60;
 
 // For debug purposes
-export const DEBUG = true;
+export const DEBUG = false;
 
 // Helper function to get 2 random words from the dictionary with acceptable length
 export const generateRandomWords = (dictArray: string[]): { currentWord: Word, availableWord: Word } => {
-  const maxAttempts = 1000;
+  const firstIndex = Math.floor(Math.random() * (dictArray.length));
+  const secondIndex = Math.floor(Math.random() * (dictArray.length));
 
-  const firstIndex = Math.floor(Math.random() * (dictArray.length - maxAttempts));
-  const secondIndex = Math.floor(Math.random() * (dictArray.length - maxAttempts));
-
-  for (let i = firstIndex; i < firstIndex + maxAttempts; i++) {
+  for (let i = firstIndex; i < dictArray.length; i++) {
     const word1 = dictArray[i];
     if (word1.length < MIN_WORD_GEN_LENGTH || word1.length > MAX_WORD_GEN_LENGTH) {
       continue;
     }
-    for (let j = secondIndex; j < secondIndex + maxAttempts; j++) {
+    for (let j = secondIndex; j < dictArray.length; j++) {
       const word2 = dictArray[j];
       if (word2.length < MIN_WORD_GEN_LENGTH || word2.length > MAX_WORD_GEN_LENGTH) {
         continue;

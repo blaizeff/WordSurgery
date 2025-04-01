@@ -12,10 +12,10 @@ import { useWordDetection } from "../../hooks/game/useWordDetection";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { DEBUG, generateRandomWords } from "src/utils/gameUtils";
 import { useUndo } from "src/hooks/game/useUndo";
-
+import { useTranslation } from "src/hooks/useTranslation";
 const GAME_DURATION = 120;
 
-export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps) {
+export default function Game({ currentLanguage, dictionary, dictArray, onBackToMenu }: GameProps) {
   // Create refs and states
   const wordContainerRef = useRef<View>(null);
   const confettiRef = useRef<LottieView>(null);
@@ -34,6 +34,8 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
   const initialAvailableWord = initialWords.availableWord;
   
   // Hooks
+  const { t } = useTranslation(currentLanguage);
+
   const {
     currentWord,
     setCurrentWord,
@@ -171,11 +173,11 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
             onPress={onBackToMenu}
           >
             <Ionicons name="arrow-back" size={16} color="black" />
-            <Text style={gameStyles.backButtonText}>Back</Text>
+            <Text style={gameStyles.backButtonText}>{t('game.back_button')}</Text>
           </TouchableOpacity>
         )}
         
-        <Text style={gameStyles.title}>Word Surgery</Text>
+        <Text style={gameStyles.title}>{t('game.title')}</Text>
         
         {/* Timer */}
         <View style={[gameStyles.timerContainer]}>
@@ -209,6 +211,7 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
 
         {/* Detected Words Alert */}
         <DetectedWordsList 
+          t={t}
           detectedWords={detectedWords} 
           handleRemoveWord={handleRemoveWordWithUndo} 
         />
@@ -224,7 +227,7 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
             disabled={undoStack.length === 0}
           >
             <Ionicons name="arrow-undo" size={20} color="white" />
-            <Text style={gameStyles.undoButtonText}>Undo</Text>
+            <Text style={gameStyles.undoButtonText}>{t('game.button_undo')}</Text>
           </TouchableOpacity>
 
           {/* Available Letters */}
@@ -255,12 +258,12 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
               loop={false}
             />
             <View style={gameStyles.victoryDialog}>
-              <Text style={gameStyles.victoryText}>Game Completed!</Text>
+              <Text style={gameStyles.victoryText}>{t('game.game_completed')}</Text>
               <TouchableOpacity 
                 style={gameStyles.victoryButton}
                 onPress={resetGame}
               >
-                <Text style={gameStyles.victoryButtonText}>Play Again</Text>
+                <Text style={gameStyles.victoryButtonText}>{t('game.button_play_again')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -271,12 +274,12 @@ export default function Game({ dictionary, dictArray, onBackToMenu }: GameProps)
           <View style={gameStyles.victoryOverlay}>
             <View style={gameStyles.victoryDialog}>
               <Ionicons name="timer-outline" size={50} color="#FF5252" style={{marginBottom: 10}} />
-              <Text style={[gameStyles.victoryText, {color: '#FF5252'}]}>Time's Up!</Text>
+              <Text style={[gameStyles.victoryText, {color: '#FF5252'}]}>{t('game.time_up')}</Text>
               <TouchableOpacity 
                 style={[gameStyles.victoryButton, {backgroundColor: '#FF5252'}]}
                 onPress={resetGame}
               >
-                <Text style={gameStyles.victoryButtonText}>Try Again</Text>
+                <Text style={gameStyles.victoryButtonText}>{t('game.button_try_again')}</Text>
               </TouchableOpacity>
             </View>
           </View>

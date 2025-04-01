@@ -11,7 +11,16 @@ import React from 'react';
 
 export default function App() {
   const [showMenu, setShowMenu] = useState(true);
-  const { currentLanguage, words, wordsArray, isLoading, setLanguage, addCustomDictionary } = useLanguage();
+  const { 
+    currentLanguage, 
+    dictionarySource, 
+    words, 
+    wordsArray, 
+    isLoading, 
+    setLanguage, 
+    addCustomDictionary, 
+    removeCustomDictionary 
+  } = useLanguage();
   const [appReady, setAppReady] = useState(false);
   const [splashVisible, setSplashVisible] = useState(true);
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -49,11 +58,14 @@ export default function App() {
               onStart={handleStartGame} 
               onSelectLanguage={setLanguage}
               onAddCustomDictionary={addCustomDictionary}
+              onRemoveCustomDictionary={removeCustomDictionary}
               currentLanguage={currentLanguage}
+              dictionarySource={dictionarySource}
               isLoading={isLoading}
             />
           ) : (
             <Game
+              currentLanguage={currentLanguage}
               dictionary={words} 
               dictArray={wordsArray}
               onBackToMenu={handleBackToMenu}

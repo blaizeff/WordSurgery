@@ -10,22 +10,26 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Language } from '../hooks/useLanguage';
+import { Language, DictionarySource } from '../hooks/useLanguage';
 import { useTranslation } from 'src/hooks/useTranslation';
 
 interface MenuProps {
   onStart: () => void;
   onSelectLanguage: (language: Language) => void;
   onAddCustomDictionary: (url: string) => Promise<void>;
+  onRemoveCustomDictionary: () => Promise<void>;
   currentLanguage: Language;
+  dictionarySource: DictionarySource;
   isLoading: boolean;
 }
 
 const Menu: React.FC<MenuProps> = ({ 
   onStart, 
   onSelectLanguage, 
-  onAddCustomDictionary, 
+  onAddCustomDictionary,
+  onRemoveCustomDictionary,
   currentLanguage,
+  dictionarySource,
   isLoading
 }) => {
   const [customUrl, setCustomUrl] = useState('');
@@ -71,6 +75,28 @@ const Menu: React.FC<MenuProps> = ({
     } finally {
       setIsAddingCustom(false);
     }
+  };
+
+  const handleRemoveCustomDictionary = () => {
+    Alert.alert(
+      t('menu.remove_dictionary_title'),
+      t('menu.remove_dictionary_message'),
+      [
+        {
+          text: t('menu.cancel'),
+          style: 'cancel',
+        },
+        {
+          text: t('menu.remove'),
+          onPress: async () => {
+            setLocalLoading(true);
+            await onRemoveCustomDictionary();
+            setLocalLoading(false);
+          },
+          style: 'destructive',
+        },
+      ],
+    );
   };
 
   return (
@@ -123,47 +149,42 @@ const Menu: React.FC<MenuProps> = ({
                   currentLanguage === 'fr' && styles.selectedToggleButtonText
                 ]}>{t('menu.button_french')}</Text>
               </TouchableOpacity>
-
-              {currentLanguage === 'custom' && (
-                <TouchableOpacity
-                  style={[
-                    styles.languageToggleButton,
-                    currentLanguage === 'custom' && styles.selectedToggleButton
-                  ]}
-                  onPress={() => handleSelectLanguage('custom')}
-                  disabled={isCurrentlyLoading}
-                >
-                  <Text style={[
-                    styles.toggleButtonText,
-                    currentLanguage === 'custom' && styles.selectedToggleButtonText
-                  ]}>{t('menu.button_custom_dictionary')}</Text>
-                </TouchableOpacity>
-              )}
             </View>
 
-            {currentLanguage !== 'custom' && (
+            {dictionarySource === 'custom' ? (
+              <View style={styles.customDictionaryContainer}>
+                <TouchableOpacity
+                  style={styles.customDictionaryActive}
+                  onPress={() => setModalVisible(true)}
+                  disabled={isCurrentlyLoading}
+                >
+                  <Text style={styles.customDictionaryLinkText}>
+                    {t('menu.button_change_dictionary')}
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.removeCustomDictionary}
+                  onPress={handleRemoveCustomDictionary}
+                  disabled={isCurrentlyLoading}
+                >
+                  <Text style={styles.removeCustomDictionaryText}>
+                    {t('menu.button_remove_dictionary')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
               <TouchableOpacity
                 style={styles.customDictionaryLink}
                 onPress={() => setModalVisible(true)}
                 disabled={isCurrentlyLoading}
               >
-                <Text style={styles.customDictionaryLinkText}>{t('menu.button_add_dictionary')}</Text>
+                <Text style={styles.customDictionaryLinkText}>
+                  {t('menu.button_add_dictionary')}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
-
-          {currentLanguage === 'custom' && (
-            <TouchableOpacity
-              style={[
-                styles.customButton,
-                isCurrentlyLoading && styles.disabledContent
-              ]}
-              onPress={() => setModalVisible(true)}
-              disabled={isCurrentlyLoading}
-            >
-              <Text style={styles.customButtonText}>{t('menu.button_add_dictionary')}</Text>
-            </TouchableOpacity>
-          )}
 
           <TouchableOpacity
             style={[
@@ -208,7 +229,7 @@ const Menu: React.FC<MenuProps> = ({
                 onPress={() => setModalVisible(false)}
                 disabled={isAddingCustom}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.cancelButtonText}>{t('menu.cancel')}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
@@ -219,7 +240,7 @@ const Menu: React.FC<MenuProps> = ({
                 {isAddingCustom ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.modalButtonText}>Add</Text>
+                  <Text style={styles.modalButtonText}>{t('menu.add')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -294,6 +315,10 @@ const styles = StyleSheet.create({
   selectedToggleButtonText: {
     color: '#fff',
   },
+  customDictionaryContainer: {
+    width: '100%',
+    alignItems: 'center',
+  },
   customDictionaryLink: {
     padding: 8,
     marginBottom: 15,
@@ -303,20 +328,21 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
-  customButton: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 10,
-    padding: 15,
-    width: '100%',
+  customDictionaryActive: {
+    padding: 8,
+    marginBottom: 8,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 30,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderStyle: 'dashed',
+    justifyContent: 'center',
   },
-  customButtonText: {
-    fontSize: 16,
-    color: '#666',
+  removeCustomDictionary: {
+    padding: 4,
+    marginBottom: 15,
+  },
+  removeCustomDictionaryText: {
+    fontSize: 12,
+    color: '#ff3b30',
+    textAlign: 'center',
   },
   startButton: {
     backgroundColor: '#3A63ED',

@@ -37,7 +37,7 @@ export const gameStyles = StyleSheet.create({
     height: 60,
     margin: 2,
     flexShrink: 1,
-    borderRadius: 8
+    borderRadius: 8,
   },
   initialLetterBox: {
     borderWidth: 0,
@@ -45,7 +45,9 @@ export const gameStyles = StyleSheet.create({
   },
   letterText: {
     fontSize: 18,
-    textAlign: 'center'
+    fontWeight: 500,
+    textAlign: 'center',
+    textTransform: 'uppercase'
   },
   staticLetterText: {
     color: 'black'
@@ -67,15 +69,7 @@ export const gameStyles = StyleSheet.create({
     borderWidth: 0,
   },
   disabledLetterText: {
-    color: 'rgb(150, 150, 150)',
-  },
-  completedLetterBox: {
-    backgroundColor: '#C5E1A5', // Light green for completed letters
-    borderColor: '#7CB342',
-  },
-  completedLetterText: {
-    color: '#2E7D32', // Dark green for text in completed letters
-    fontWeight: 'bold',
+    color: 'transparent',
   },
   disabledDraggableLetterBox: {
     backgroundColor: 'rgb(230, 230, 230)',
@@ -129,13 +123,14 @@ export const gameStyles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 4,
     borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
+    borderLeftColor: '#3A63ED',
   },
   detectedWordText: {
     fontSize: 16,
+    textTransform: 'uppercase',
   },
   removeButton: {
-    backgroundColor: '#f44336',
+    backgroundColor: '#3A63ED',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 4,
@@ -146,7 +141,7 @@ export const gameStyles = StyleSheet.create({
   },
   undoButton: {
     flexDirection: 'row',
-    backgroundColor: '#2196F3',
+    backgroundColor: '#3A63ED',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
@@ -155,11 +150,6 @@ export const gameStyles = StyleSheet.create({
     alignSelf: 'center',
     marginTop: 16,
     marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
   },
   undoButtonText: {
     color: 'white',
